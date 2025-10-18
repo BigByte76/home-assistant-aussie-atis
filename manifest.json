@@ -1,0 +1,10 @@
+{
+  "domain": "australian_atis",
+  "name": "Australian ATIS",
+  "version": "1.2.0",
+  "requirements": ["requests"],
+  "dependencies": [],
+  "codeowners": ["@yourgithubusername"],
+  "config_flow": true,
+  "documentation": "https://github.com/BigByte76/australian_atis"
+}
