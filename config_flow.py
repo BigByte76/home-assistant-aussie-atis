@@ -1,19 +1,18 @@
-"""Config flow for Australian ATIS integration."""
-import voluptuous as vol
+"""Config flow for Australian ATIS"""
 from homeassistant import config_entries
+import voluptuous as vol
 
 DOMAIN = "australian_atis"
 
 class AustralianATISConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Australian ATIS."""
+    VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(title=user_input["airport"], data=user_input)
+            return self.async_create_entry(title=user_input["airport_code"], data=user_input)
 
         data_schema = vol.Schema({
-            vol.Required("airport", default="YMML"): str,
-            vol.Optional("refresh_interval", default=1800): int,  # in seconds
+            vol.Required("airport_code", default="YMML"): str
         })
-        return self.async_show_form(step_id="user", data_schema=data_schema)
+        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
