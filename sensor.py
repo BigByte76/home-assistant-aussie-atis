@@ -1,40 +1,37 @@
-"""Sensor for Australian ATIS"""
 import logging
 from datetime import datetime, timezone
 import requests
 import re
-
+import json
 import voluptuous as vol
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
-from homeassistant.const import CONF_NAME
+
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.entity import Entity
+from homeassistant.components.sensor import PLATFORM_SCHEMA
 
 _LOGGER = logging.getLogger(__name__)
 
-CONF_AIRPORT = "airport_code"
+CONF_AIRPORT = "airport"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Required(CONF_AIRPORT): cv.string,
-    vol.Optional(CONF_NAME, default="Australian ATIS"): cv.string
-})
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {
+        vol.Required(CONF_AIRPORT): cv.string,
+    }
+)
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
-    airport = config[CONF_AIRPORT]
-    name = config.get(CONF_NAME)
-    add_entities([AustralianATISSensor(name, airport)], True)
+    airport_code = config[CONF_AIRPORT]
+    add_entities([AustralianAtisSensor(airport_code)], True)
 
-class AustralianATISSensor(SensorEntity):
-    """Representation of an ATIS sensor"""
-
-    def __init__(self, name, airport):
-        self._name = name
+class AustralianAtisSensor(Entity):
+    def __init__(self, airport):
         self._airport = airport
         self._state = None
         self._attributes = {}
 
     @property
     def name(self):
-        return self._name
+        return f"{self._airport} Australian ATIS"
 
     @property
     def state(self):
@@ -45,80 +42,76 @@ class AustralianATISSensor(SensorEntity):
         return self._attributes
 
     def update(self):
-        """Fetch ATIS info"""
         url = f"http://aussieadsb.com/airportinfo/{self._airport}"
         try:
             r = requests.get(url, timeout=10)
             r.raise_for_status()
             html = r.text
         except Exception as e:
-            _LOGGER.error("Error fetching ATIS for %s: %s", self._airport, e)
+            _LOGGER.error("Error fetching ATIS: %s", e)
             return
 
-        # --- ATIS ---
         atis_match = re.search(r"<h6>ATIS</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
-        atis_raw = atis_match.group(1).replace("&#xA;", "\n").strip() if atis_match else ""
+        atis_raw = atis_match.group(1).replace("&#xA;", "\n").strip() if atis_match else None
 
-        # --- Approach ---
-        approach_match = re.search(r"APCH: (.*?)\n", atis_raw)
+        # --- Parse fields ---
+        code_match = re.search(r"ATIS.*?([A-Z])\s", atis_raw or "")
+        code = code_match.group(1) if code_match else None
+
+        approach_match = re.search(r"APCH: (.*?)\n", atis_raw or "")
         approach = approach_match.group(1).strip() if approach_match else None
 
-        # --- Runways ---
-        rwy_arr_match = re.search(r"RWY: (\d+) FOR ARR", atis_raw)
+        rwy_arr_match = re.search(r"RWY: (\d+) FOR ARR", atis_raw or "")
         runway_arr = rwy_arr_match.group(1) if rwy_arr_match else None
 
-        rwy_dep_match = re.search(r"RWY (\d+) FOR DEP", atis_raw)
+        rwy_dep_match = re.search(r"RWY (\d+) FOR DEP", atis_raw or "")
         runway_dep = rwy_dep_match.group(1) if rwy_dep_match else None
 
-        # --- OPR INFO ---
         opr_lines = []
         collect = False
         for line in atis_raw.splitlines():
-            line = line.strip()
-            if line.startswith("OPR INFO:"):
+            if line.strip().startswith("OPR INFO:"):
                 opr_lines.append(line.replace("OPR INFO:", "").strip())
                 collect = True
                 continue
             if collect:
-                if any(line.startswith(k) for k in ["WND:", "WX:", "TMP:", "QNH:"]):
+                if any(line.strip().startswith(k) for k in ["WND:", "WX:", "TMP:", "QNH:"]):
                     collect = False
                 else:
                     opr_lines.append(line.strip())
-        opr_info = " ".join(opr_lines)
+        opr_info = " ".join(opr_lines) if opr_lines else None
 
-        # --- Wind ---
-        wind_match = re.search(r'WND:\s*(.+)', atis_raw)
+        wind_match = re.search(r"WND: (.+)", atis_raw or "")
         wind = wind_match.group(1).strip() if wind_match else None
-        wind_dir, wind_speed, wind_max_tw = None, None, None
-        if wind:
-            m = re.match(r"(VRB|\d{3})/(\d+)(?:.*MAX TW (\d+))?", wind)
-            if m:
-                wind_dir, wind_speed, wind_max_tw = m.groups()
 
-        # --- Weather ---
-        weather_match = re.search(r"WX: (\S+)", atis_raw)
+        # split wind into direction, speed, max TW
+        wind_dir = None
+        wind_speed = None
+        wind_max_tw = None
+        if wind:
+            parts = re.match(r"([A-Z]+|\d{3})/(\d+)\.?(?: MAX TW (\d+))?", wind)
+            if parts:
+                wind_dir, wind_speed, wind_max_tw = parts.groups()
+
+        weather_match = re.search(r"WX: (\S+)", atis_raw or "")
         weather = weather_match.group(1) if weather_match else None
 
-        # --- Temperature ---
-        tmp_match = re.search(r"TMP: (\d+)", atis_raw)
+        tmp_match = re.search(r"TMP: (\d+)", atis_raw or "")
         temperature = tmp_match.group(1) if tmp_match else None
 
-        # --- QNH ---
-        qnh_match = re.search(r"QNH: (\d+)", atis_raw)
+        qnh_match = re.search(r"QNH: (\d+)", atis_raw or "")
         qnh = qnh_match.group(1) if qnh_match else None
 
-        # --- METAR ---
         metar_match = re.search(r"<h6>METAR/SPECI</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
         metar = metar_match.group(1).strip() if metar_match else None
 
-        # --- TAF ---
         taf_match = re.search(r"<h6>TAF</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
         taf = taf_match.group(1).replace("&#xA;", "\n").strip() if taf_match else None
 
-        self._state = f"ATIS {self._airport}"
+        self._state = f"ATIS {code}" if code else "Unknown"
         self._attributes = {
             "atis": atis_raw,
-            "code": self._airport,
+            "code": code,
             "approach": approach,
             "runway_arr": runway_arr,
             "runway_dep": runway_dep,
@@ -132,5 +125,5 @@ class AustralianATISSensor(SensorEntity):
             "qnh": qnh,
             "metar": metar,
             "taf": taf,
-            "last_updated": datetime.now(timezone.utc).isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat(),
         }
