@@ -1,10 +1,12 @@
 {
   "domain": "australian_atis",
   "name": "Australian ATIS",
-  "version": "1.2.0",
+  "version": "1.0.0",
+  "documentation": "https://github.com/yourusername/australian_atis",
   "requirements": ["requests"],
   "dependencies": [],
-  "codeowners": ["@yourgithubusername"],
+  "codeowners": ["@yourusername"],
   "config_flow": true,
-  "documentation": "https://github.com/BigByte76/australian_atis"
+  "iot_class": "cloud_polling",
+  "homeassistant": "2025.10.1"
 }
