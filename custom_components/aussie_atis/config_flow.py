@@ -1,40 +1,30 @@
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-from .const import DOMAIN
+from homeassistant.helpers.selector import SelectSelector
+from homeassistant.helpers import config_validation as cv
+import voluptuous as vol
 
-AIRPORTS = [
-    "YSSY", "YMML", "YBBN", "YPPH", "YPAD", "YBCG", "YBCS", "YSCB",
-    "YMHB", "YPDN", "YBTL", "YMLT", "YWLM", "YBMK", "YBSU", "YPKA",
-    "YBRK", "YBAS", "YPPD", "YAMB", "YPED", "YPTN", "YMES", "YPEA",
-    "YSRI", "YBTL", "YPDN", "YBSG", "YPLM", "YCIN", "YGIG", "YGNB",
-    "YMPC", "YPWR", "YBOK", "YSNW"
-]
-
-class AussieAtisConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class AussieAtisConfigFlow(config_entries.ConfigFlow, domain="aussie_atis"):
     """Handle a config flow for Aussie ATIS."""
 
     VERSION = 1
 
+    def __init__(self):
+        """Initialize the flow."""
+        self.airports = []
+
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
-        errors = {}
         if user_input is not None:
-            return self.async_create_entry(
-                title="Australian ATIS",
-                data={
-                    "airports": user_input["airports"]
-                }
-            )
-
-        data_schema = vol.Schema({
-            vol.Required("airports", default=["YMML"]): vol.All(
-                vol.Length(min=1), vol.Unique(), vol.In(AIRPORTS)
-            )
-        })
+            self.airports = user_input["airports"]
+            return self.async_create_entry(title="Australian ATIS", data={"airports": self.airports})
 
         return self.async_show_form(
             step_id="user",
-            data_schema=data_schema,
-            errors=errors
+            data_schema=vol.Schema({
+                vol.Required("airports"): SelectSelector(
+                    options=["YMML", "YSSY", "YBBN", "YPPH", "YSCB"],
+                    multiple=True
+                ),
+            }),
         )
