@@ -1,10 +1,11 @@
+import asyncio
 import requests
 import re
 from datetime import datetime, timezone
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 def fetch_atis_data(airport_code: str):
     url = f"http://aussieadsb.com/airportinfo/{airport_code}"
