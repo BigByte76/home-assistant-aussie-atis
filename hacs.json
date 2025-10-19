@@ -1,9 +1,0 @@
-{
-  "name": "Australian ATIS",
-  "homeassistant": "2024.5.0",
-  "render_readme": true,
-  "hacs": "2.0.1",
-  "render_readme": true,
-  "zip_release": true,
-  "filename": "Australian_ATITS.zip"
-}
