@@ -29,17 +29,31 @@ def fetch_atis_data(airport_code: str):
     approach_match = re.search(r"APCH:\s*(.+)", atis_raw or "")
     approach = approach_match.group(1).strip() if approach_match else None
 
-    # Runways
+    # ---- RUNWAYS ----
     rwy_match = re.search(r"RWY:\s*(.+)", atis_raw or "")
     runway_line = rwy_match.group(1).strip() if rwy_match else None
-    runway_arr = runway_dep = None
+
+    runway_arr = None
+    runway_dep = None
+
     if runway_line:
-        # If single runway, assume same for arrival and departure
-        if re.fullmatch(r"\d{2}[A-Z]?", runway_line):
+        # Split multiple runways by "."
+        parts = [p.strip() for p in runway_line.split(".")]
+        for part in parts:
+            # Arrival runway
+            arr_match = re.search(r"(\d{2}[A-Z]?)\s*FOR ARR", part)
+            if arr_match:
+                runway_arr = arr_match.group(1)
+            # Departure runway
+            dep_match = re.search(r"(\d{2}[A-Z]?)\s*FOR DEP", part)
+            if dep_match:
+                runway_dep = dep_match.group(1)
+
+        # If only a single runway is given and no ARR/DEP keywords, assume both
+        if not runway_arr and not runway_dep and re.fullmatch(r"\d{2}[A-Z]?", runway_line):
             runway_arr = runway_line
             runway_dep = runway_line
-        else:
-            runway_arr = runway_line
+
 
     # OPR INFO
     opr_lines = []
