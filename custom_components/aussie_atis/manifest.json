@@ -1,0 +1,10 @@
+{
+        "domain": "aussie_atis",
+        "name": "Australian ATIS",
+        "version": "1.0.0",
+        "documentation": "https://github.com/BigByte76/home-assistant-aussie-atis",
+        "requirements": ["requests"],
+        "codeowners": ["@BigByte76"],
+        "iot_class": "cloud_polling",
+        "integration_type": "hub"
+    }
