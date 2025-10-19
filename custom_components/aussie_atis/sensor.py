@@ -7,7 +7,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-# List of individual sensor attributes
 SENSOR_ATTRIBUTES = [
     "approach",
     "runway_arr",
@@ -27,7 +26,7 @@ SENSOR_ATTRIBUTES = [
 ]
 
 def fetch_atis_data(airport_code: str):
-    """Fetch and parse ATIS data for a given airport code."""
+    """Fetch and parse ATIS data for a given airport."""
     url = f"http://aussieadsb.com/airportinfo/{airport_code}"
     try:
         r = requests.get(url, timeout=10)
@@ -51,70 +50,50 @@ def fetch_atis_data(airport_code: str):
     approach_match = re.search(r"APCH:\s*(.+)", atis_raw or "")
     parsed["approach"] = approach_match.group(1).strip() if approach_match else None
 
-# ---- Runways ----
-parsed["runway_arr"] = parsed["runway_dep"] = None
-rwy_match = re.search(r"RWY:\s*(.+)", atis_raw or "")
-if rwy_match:
-    rwy_text = rwy_match.group(1).strip()
-    # Handle format: "34L AND R FOR ARRS AND DEPS"
-    arr_dep_match = re.search(r"(\d{2}[A-Z]?)\s*AND\s*(\d{1,2}[A-Z]?)\s*FOR ARRS AND DEPS", rwy_text)
-    if arr_dep_match:
-        # Return both runways as a string
-        parsed["runway_arr"] = f"{arr_dep_match.group(1)} and {arr_dep_match.group(2)}"
-        parsed["runway_dep"] = f"{arr_dep_match.group(1)} and {arr_dep_match.group(2)}"
-    else:
-        # Generic parsing: split by '.', AND, or ','
-        parts = re.split(r"\.|AND|,", rwy_text)
-        arr_list = []
-        dep_list = []
-        for part in parts:
-            part = part.strip()
-            arr_match = re.search(r"(\d{2}[A-Z]?)\s*FOR ARR", part)
-            if arr_match:
-                arr_list.append(arr_match.group(1))
-            dep_match = re.search(r"(\d{2}[A-Z]?)\s*FOR DEP", part)
-            if dep_match:
-                dep_list.append(dep_match.group(1))
-        if arr_list:
-            parsed["runway_arr"] = " and ".join(arr_list)
-        if dep_list:
-            parsed["runway_dep"] = " and ".join(dep_list)
-        # If no explicit ARR/DEP, assign first runway
-        if not parsed["runway_arr"] and not parsed["runway_dep"] and re.fullmatch(r"\d{2}[A-Z]?", rwy_text):
-            parsed["runway_arr"] = parsed["runway_dep"] = rwy_text
+    # Runways
+    parsed["runway_arr"] = parsed["runway_dep"] = None
+    rwy_match = re.search(r"RWY:\s*(.+)", atis_raw or "")
+    if rwy_match:
+        rwy_text = rwy_match.group(1).strip()
+        # Match multiple runways like "34L AND R FOR ARRS AND DEPS"
+        arr_dep_match = re.search(r"(\d{2}[A-Z]?) AND (\d{1,2}[A-Z]?) FOR ARRS AND DEPS", rwy_text)
+        if arr_dep_match:
+            parsed["runway_arr"] = f"{arr_dep_match.group(1)} and {arr_dep_match.group(2)}"
+            parsed["runway_dep"] = f"{arr_dep_match.group(1)} and {arr_dep_match.group(2)}"
+        else:
+            # Match single ARR/DEP keywords
+            parts = [p.strip() for p in rwy_text.split(".")]
+            for part in parts:
+                arr_match = re.search(r"(\d{2}[A-Z]?)\s*FOR ARR", part)
+                if arr_match:
+                    parsed["runway_arr"] = arr_match.group(1)
+                dep_match = re.search(r"(\d{2}[A-Z]?)\s*FOR DEP", part)
+                if dep_match:
+                    parsed["runway_dep"] = dep_match.group(1)
+            # If no explicit ARR/DEP, assign single runway
+            if not parsed["runway_arr"] and not parsed["runway_dep"] and re.fullmatch(r"\d{2}[A-Z]?", rwy_text):
+                parsed["runway_arr"] = parsed["runway_dep"] = rwy_text
 
-
-    # ---- OPR INFO ----
+    # OPR INFO
     opr_lines = []
     collect = False
     for line in atis_lines:
-        line = line.strip(" +")
         if line.startswith("OPR INFO:"):
-            opr_lines.append(line.replace("OPR INFO:", "").strip())
+            text = line.replace("OPR INFO:", "").strip()
+            if text:
+                opr_lines.append(text)
             collect = True
             continue
         if collect:
-            if any(line.startswith(k) for k in ["WND:", "WIND:", "WX:", "TMP:", "QNH:", "SIGWX:"]):
+            if any(line.startswith(k) for k in ["WND:", "WX:", "TMP:", "QNH:", "SIGWX:"]):
                 collect = False
             else:
                 opr_lines.append(line.strip())
     parsed["opr_info"] = " ".join(opr_lines) if opr_lines else None
 
-    # ---- Wind ----
-    wind_lines = []
-    collect = False
-    for line in atis_lines:
-        line = line.strip(" +")
-        if line.startswith("WND:") or line.startswith("WIND:"):
-            wind_lines.append(line.replace("WND:", "").replace("WIND:", "").strip())
-            collect = True
-            continue
-        if collect:
-            if any(line.startswith(k) for k in ["WX:", "TMP:", "QNH:", "SIGWX:"]):
-                collect = False
-            else:
-                wind_lines.append(line.strip())
-    wind = " ".join(wind_lines) if wind_lines else None
+    # Wind
+    wind_match = re.search(r"WND:\s*([\w/0-9., \-]+)", atis_raw or "")
+    wind = wind_match.group(1).strip() if wind_match else None
     parsed["wind"] = wind
     parsed["wind_dir"] = parsed["wind_speed"] = parsed["wind_gust"] = parsed["wind_max_tw"] = None
     if wind:
@@ -127,7 +106,7 @@ if rwy_match:
         if max_tw_match:
             parsed["wind_max_tw"] = max_tw_match.group(1)
 
-    # ---- Other fields ----
+    # Other fields
     weather_match = re.search(r"WX:\s*(\S+)", atis_raw or "")
     parsed["weather"] = weather_match.group(1) if weather_match else None
 
@@ -140,9 +119,11 @@ if rwy_match:
     sigwx_match = re.search(r"SIGWX:\s*(.+)", atis_raw or "")
     parsed["sigwx"] = sigwx_match.group(1).strip() if sigwx_match else None
 
+    # METAR
     metar_match = re.search(r"<h6>METAR/SPECI</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
     parsed["metar"] = metar_match.group(1).strip() if metar_match else None
 
+    # TAF
     taf_match = re.search(r"<h6>TAF</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
     parsed["taf"] = taf_match.group(1).replace("&#xA;", "\n").strip() if taf_match else None
 
@@ -153,7 +134,7 @@ if rwy_match:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """Set up individual ATIS attribute sensors for each selected airport."""
+    """Set up ATIS sensors for all selected airports and attributes."""
     airports = entry.data.get("airports", [])
     sensors = []
 
@@ -166,13 +147,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class ATISAttributeSensor(SensorEntity):
-    """Sensor representing a single ATIS attribute for an airport."""
+    """Sensor for a single ATIS attribute."""
 
     def __init__(self, airport_code: str, attribute: str, data: dict):
         self.airport_code = airport_code
         self.attribute = attribute
         self._data = data
-        self._attr_name = f"{airport_code} ATIS {attribute.replace('_', ' ').title()}"
+        self._attr_name = f"{airport_code} ATIS {attribute.replace('_',' ').title()}"
 
     @property
     def name(self):
