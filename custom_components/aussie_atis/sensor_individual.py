@@ -1,3 +1,5 @@
+#Doesn't work with parallel runwayas, EG YSSY and YBBN
+
 import asyncio
 import requests
 import re
