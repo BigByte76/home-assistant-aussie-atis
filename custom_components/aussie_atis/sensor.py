@@ -51,28 +51,38 @@ def fetch_atis_data(airport_code: str):
     approach_match = re.search(r"APCH:\s*(.+)", atis_raw or "")
     parsed["approach"] = approach_match.group(1).strip() if approach_match else None
 
-    # ---- Runways ----
-    rwy_match = re.search(r"RWY:\s*(.+)", atis_raw or "")
-    runway_line = rwy_match.group(1).strip() if rwy_match else None
-    parsed["runway_arr"] = parsed["runway_dep"] = None
-    if runway_line:
-        # Handle "34L AND R FOR ARRS AND DEPS"
-        arr_dep_match = re.search(r"(\d{2}[A-Z]?)\s*AND\s*(\d{2}[A-Z]?)\s*FOR ARRS AND DEPS", runway_line)
-        if arr_dep_match:
-            parsed["runway_arr"] = arr_dep_match.group(1)
-            parsed["runway_dep"] = arr_dep_match.group(2)
-        else:
-            parts = re.split(r"\.|AND", runway_line)
-            for part in parts:
-                part = part.strip()
-                arr_match = re.search(r"(\d{2}[A-Z]?)\s*FOR ARR", part)
-                if arr_match:
-                    parsed["runway_arr"] = arr_match.group(1)
-                dep_match = re.search(r"(\d{2}[A-Z]?)\s*FOR DEP", part)
-                if dep_match:
-                    parsed["runway_dep"] = dep_match.group(1)
-            if not parsed["runway_arr"] and not parsed["runway_dep"] and re.fullmatch(r"\d{2}[A-Z]?", runway_line):
-                parsed["runway_arr"] = parsed["runway_dep"] = runway_line
+# ---- Runways ----
+parsed["runway_arr"] = parsed["runway_dep"] = None
+rwy_match = re.search(r"RWY:\s*(.+)", atis_raw or "")
+if rwy_match:
+    rwy_text = rwy_match.group(1).strip()
+    # Handle format: "34L AND R FOR ARRS AND DEPS"
+    arr_dep_match = re.search(r"(\d{2}[A-Z]?)\s*AND\s*(\d{1,2}[A-Z]?)\s*FOR ARRS AND DEPS", rwy_text)
+    if arr_dep_match:
+        # Return both runways as a string
+        parsed["runway_arr"] = f"{arr_dep_match.group(1)} and {arr_dep_match.group(2)}"
+        parsed["runway_dep"] = f"{arr_dep_match.group(1)} and {arr_dep_match.group(2)}"
+    else:
+        # Generic parsing: split by '.', AND, or ','
+        parts = re.split(r"\.|AND|,", rwy_text)
+        arr_list = []
+        dep_list = []
+        for part in parts:
+            part = part.strip()
+            arr_match = re.search(r"(\d{2}[A-Z]?)\s*FOR ARR", part)
+            if arr_match:
+                arr_list.append(arr_match.group(1))
+            dep_match = re.search(r"(\d{2}[A-Z]?)\s*FOR DEP", part)
+            if dep_match:
+                dep_list.append(dep_match.group(1))
+        if arr_list:
+            parsed["runway_arr"] = " and ".join(arr_list)
+        if dep_list:
+            parsed["runway_dep"] = " and ".join(dep_list)
+        # If no explicit ARR/DEP, assign first runway
+        if not parsed["runway_arr"] and not parsed["runway_dep"] and re.fullmatch(r"\d{2}[A-Z]?", rwy_text):
+            parsed["runway_arr"] = parsed["runway_dep"] = rwy_text
+
 
     # ---- OPR INFO ----
     opr_lines = []
