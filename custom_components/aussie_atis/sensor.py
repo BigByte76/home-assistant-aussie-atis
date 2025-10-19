@@ -1,5 +1,3 @@
-import asyncio
-import json
 import requests
 import re
 from datetime import datetime, timezone
@@ -8,7 +6,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-# ---- Helper function to fetch ATIS data ----
 def fetch_atis_data(airport_code: str):
     url = f"http://aussieadsb.com/airportinfo/{airport_code}"
     try:
@@ -119,7 +116,6 @@ def fetch_atis_data(airport_code: str):
         }
     }
 
-# ---- Sensor Platform Setup ----
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     """Set up ATIS sensors for the selected airports."""
     airports = entry.data.get("airports", [])
@@ -129,7 +125,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         sensors.append(ATISSensor(airport_code, atis_data))
     async_add_entities(sensors, update_before_add=True)
 
-# ---- Sensor Class ----
 class ATISSensor(SensorEntity):
     """Sensor for a single ATIS airport."""
 
