@@ -1,30 +1,19 @@
-"""Initialize Aussie ATIS integration."""
-from __future__ import annotations
-
-import asyncio
-import logging
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
-from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
+DOMAIN = "aussie_atis"
 
-PLATFORMS: list[str] = ["sensor"]
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Aussie ATIS from a config entry."""
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = entry.data
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+async def async_setup(hass: HomeAssistant, config: dict):
+    """Set up the Aussie ATIS component (empty for config flow)."""
     return True
 
+async def async_setup_entry(hass: HomeAssistant, entry):
+    """Set up Aussie ATIS from a config entry."""
+    # Store selected airports in hass.data
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = entry.data["airports"]
+    return True
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass, entry):
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-    return unload_ok
+    hass.data[DOMAIN].pop(entry.entry_id, None)
+    return True
