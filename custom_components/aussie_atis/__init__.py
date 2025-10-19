@@ -1,15 +1,8 @@
-from .sensor import AussieAtisSensor
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.typing import HomeAssistantType
 
-DOMAIN = "aussie_atis"
-
-async def async_setup(hass, config):
-    """Nothing to set up at startup; sensors are created via config entries."""
-    return True
-
-async def async_setup_entry(hass, entry, async_add_entities: AddEntitiesCallback):
-    """Create ATIS sensors for selected airports."""
-    airports = entry.data.get("airports", [])
-    entities = [AussieAtisSensor(airport) for airport in airports]
-    async_add_entities(entities, update_before_add=True)
+async def async_setup_entry(hass: HomeAssistantType, entry: ConfigEntry):
+    """Set up the integration from a config entry."""
+    # Forward the setup to the sensor platform
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
