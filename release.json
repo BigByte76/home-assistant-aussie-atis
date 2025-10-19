@@ -1,0 +1,9 @@
+{
+        "version": "1.0.0",
+        "name": "Australian ATIS",
+        "country": "AU",
+        "homeassistant": "2024.8.0",
+        "zip_release": true,
+        "filename": "home-assistant-aussie-atis.zip",
+        "release_notes": "Initial release with support for multiple Australian airports via config flow."
+    }
