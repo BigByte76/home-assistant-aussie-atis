@@ -1,6 +1,7 @@
 import asyncio
 import requests
 import re
+import html
 from datetime import datetime, timezone
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -14,24 +15,24 @@ def fetch_atis_data(airport_code: str):
     try:
         r = requests.get(url, timeout=10)
         r.raise_for_status()
-        html = r.text
+        html_text = r.text
     except Exception as e:
         return {"state": f"Error: {e}", "attributes": {}}
 
     # Extract ATIS block
-    atis_match = re.search(r"<h6>ATIS</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
-    atis_raw = atis_match.group(1).replace("&#xA;", "\n").strip() if atis_match else None
+    atis_match = re.search(r"<h6>ATIS</h6>.*?<p class=\"monospace\">(.*?)</p>", html_text, re.DOTALL)
+    atis_raw = html.unescape(atis_match.group(1)).replace("&#xA;", "\n").strip() if atis_match else None
 
     # Extract ATIS code
     code_match = re.search(r"ATIS .* (\w)\s+", atis_raw or "")
     atis_code = code_match.group(1) if code_match else None
 
     # Extract METAR and TAF
-    metar_match = re.search(r"<h6>METAR/SPECI</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
-    metar = metar_match.group(1).strip() if metar_match else None
+    metar_match = re.search(r"<h6>METAR/SPECI</h6>.*?<p class=\"monospace\">(.*?)</p>", html_text, re.DOTALL)
+    metar = html.unescape(metar_match.group(1)).strip() if metar_match else None
 
-    taf_match = re.search(r"<h6>TAF</h6>.*?<p class=\"monospace\">(.*?)</p>", html, re.DOTALL)
-    taf = taf_match.group(1).replace("&#xA;", "\n").strip() if taf_match else None
+    taf_match = re.search(r"<h6>TAF</h6>.*?<p class=\"monospace\">(.*?)</p>", html_text, re.DOTALL)
+    taf = html.unescape(taf_match.group(1)).replace("&#xA;", "\n").strip() if taf_match else None
 
     return {
         "state": atis_raw or "No ATIS available",
