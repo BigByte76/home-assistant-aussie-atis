@@ -7,7 +7,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+
 def fetch_atis_data(airport_code: str):
+    """Fetch ATIS data for a given airport code."""
     url = f"http://aussieadsb.com/airportinfo/{airport_code}"
     try:
         r = requests.get(url, timeout=10)
@@ -41,25 +43,16 @@ def fetch_atis_data(airport_code: str):
         }
     }
 
-async def async_update(self):
-    """Fetch ATIS data and update sensor state."""
-    data = await self._api.get_atis(self._icao)
-    if not data:
-        self._attr_native_value = "Unavailable"
-        return
 
-    atis_text = data.get("atis", "No ATIS available")
-    self._attr_native_value = atis_text.strip()  # ✅ Sets the state value
-    self._attr_extra_state_attributes = {
-        "code": data.get("code"),
-        "atis": atis_text,
-        "metar": data.get("metar"),
-        "taf": data.get("taf"),
-        "last_updated": data.get("last_updated"),
-    }
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+    """Set up ATIS sensors from a config entry."""
+    airports = entry.data.get("airports", [])
+    sensors = [ATISFullSensor(code) for code in airports]
+    async_add_entities(sensors, update_before_add=True)
+
 
 class ATISFullSensor(SensorEntity):
-    """Sensor that holds full ATIS text as state."""
+    """Sensor that holds full ATIS text as state and structured attributes."""
 
     def __init__(self, airport_code: str):
         self.airport_code = airport_code
@@ -72,6 +65,7 @@ class ATISFullSensor(SensorEntity):
 
     @property
     def state(self):
+        """The state is the full ATIS text."""
         return self._data.get("state", "unknown")
 
     @property
@@ -79,5 +73,6 @@ class ATISFullSensor(SensorEntity):
         return self._data.get("attributes", {})
 
     async def async_update(self):
+        """Fetch the latest ATIS data asynchronously."""
         loop = asyncio.get_event_loop()
         self._data = await loop.run_in_executor(None, fetch_atis_data, self.airport_code)
