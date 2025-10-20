@@ -21,23 +21,41 @@ def fetch_atis_data(airport_code: str):
 
     # Extract ATIS block
     atis_match = re.search(r"<h6>ATIS</h6>.*?<p class=\"monospace\">(.*?)</p>", html_text, re.DOTALL)
-    atis_raw = html.unescape(atis_match.group(1)).replace("&#xA;", "\n").strip() if atis_match else None
+    atis_raw = atis_match.group(1) if atis_match else None
+
+    if atis_raw:
+        # Decode HTML entities and normalize
+        atis_text = html.unescape(atis_raw)
+        # Replace newlines encoded as &#xA;
+        atis_text = atis_text.replace("&#xA;", "\n")
+        # Remove leading '+' and normalize indentation
+        atis_lines = []
+        for line in atis_text.splitlines():
+            line = line.strip()
+            if line.startswith("+"):
+                line = line[1:].strip()
+            atis_lines.append(line)
+        atis_text = "\n".join(atis_lines)
+    else:
+        atis_text = "No ATIS available"
 
     # Extract ATIS code
-    code_match = re.search(r"ATIS .* (\w)\s+", atis_raw or "")
+    code_match = re.search(r"ATIS .* (\w)\s+", atis_text)
     atis_code = code_match.group(1) if code_match else None
 
     # Extract METAR and TAF
     metar_match = re.search(r"<h6>METAR/SPECI</h6>.*?<p class=\"monospace\">(.*?)</p>", html_text, re.DOTALL)
-    metar = html.unescape(metar_match.group(1)).strip() if metar_match else None
+    metar = html.unescape(metar_match.group(1)).replace("&#xA;", "\n").strip() if metar_match else None
 
     taf_match = re.search(r"<h6>TAF</h6>.*?<p class=\"monospace\">(.*?)</p>", html_text, re.DOTALL)
     taf = html.unescape(taf_match.group(1)).replace("&#xA;", "\n").strip() if taf_match else None
 
     return {
-        "state": atis_raw or "No ATIS available",
+        # Use ATIS code as the state (or "unknown" if missing)
+        "state": atis_code or "unknown",
         "attributes": {
-            "code": atis_code,
+            "atis": atis_text,              # Full ATIS block
+            "code": atis_code,              # ATIS code
             "metar": metar,
             "taf": taf,
             "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -53,7 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class ATISFullSensor(SensorEntity):
-    """Sensor that holds full ATIS text as state and structured attributes."""
+    """Sensor that holds ATIS code as state and full ATIS as attribute."""
 
     def __init__(self, airport_code: str):
         self.airport_code = airport_code
@@ -66,11 +84,12 @@ class ATISFullSensor(SensorEntity):
 
     @property
     def state(self):
-        """The state is the full ATIS text."""
+        """Use ATIS code as the state."""
         return self._data.get("state", "unknown")
 
     @property
     def extra_state_attributes(self):
+        """Include full ATIS block as attribute."""
         return self._data.get("attributes", {})
 
     async def async_update(self):
