@@ -41,11 +41,22 @@ def fetch_atis_data(airport_code: str):
         }
     }
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """Set up one ATIS sensor per airport."""
-    airports = entry.data.get("airports", [])
-    sensors = [ATISFullSensor(code) for code in airports]
-    async_add_entities(sensors, update_before_add=True)
+async def async_update(self):
+    """Fetch ATIS data and update sensor state."""
+    data = await self._api.get_atis(self._icao)
+    if not data:
+        self._attr_native_value = "Unavailable"
+        return
+
+    atis_text = data.get("atis", "No ATIS available")
+    self._attr_native_value = atis_text.strip()  # ✅ Sets the state value
+    self._attr_extra_state_attributes = {
+        "code": data.get("code"),
+        "atis": atis_text,
+        "metar": data.get("metar"),
+        "taf": data.get("taf"),
+        "last_updated": data.get("last_updated"),
+    }
 
 class ATISFullSensor(SensorEntity):
     """Sensor that holds full ATIS text as state."""
