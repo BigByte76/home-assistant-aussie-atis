@@ -1,8 +1,23 @@
 {
   "domain": "aussie_atis",
   "name": "Australian ATIS",
-  "version": "1.0.0",
+  "categories": [
+    "vehicles_transport.flights",
+    "weather_alerts"
+  ],
+  "codeowners": [
+    "@BigByte76"
+  ],
   "config_flow": true,
-  "requirements": ["requests>=2.28.0"],
-  "codeowners": ["@BigByte76"]
+  "dependencies": [],
+  "documentation": "https://github.com/BigByte76/home-assistant-aussie-atis",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/BigByte76/home-assistant-aussie-atis/issues",
+  "loggers": [
+    "custom_components.aussie_atis"
+  ],
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "2.0.0"
 }

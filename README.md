@@ -1,39 +1,161 @@
 # 🇦🇺 Australian ATIS for Home Assistant
 
-A Home Assistant custom integration that provides live **ATIS information** for Australian civil and military airports using data from [Aussie ADS-B](http://aussieadsb.com).
+Live **ATIS**, **METAR** and **TAF** for major Australian civil and military airports in Home Assistant. Data comes from [Aussie ADS-B](https://aussieadsb.com).
+
+Each airport you pick becomes a device, and every part of its ATIS is a separate sensor: active runways, wind, QNH, temperature and so on. You can add them to dashboards, graph them, or use them in automations.
 
 ## ✈️ Features
-- Fetches current ATIS, METAR, and TAF data for selected airports.
-- Supports **multiple airport selection** via the integration setup flow.
-- Automatically creates sensors for:
-  - ATIS Code
-  - Approach
-  - Arrival Runway
-  - Departure Runway
-  - Wind / Temperature / QNH / Weather
-  - OPR Info
-  - METAR & TAF
 
-## 🧰 Installation (HACS)
-1. Open HACS in Home Assistant.
-2. Click **Custom Repositories** and add:
+- **One sensor per ATIS field**, for every airport you choose.
+- **Arrival and departure runways are listed separately.** This includes parallel and split operations such as `34L AND R FOR ARRS AND DEPS` or `16 FOR ARR. RWY 27 FOR DEP`.
+- **Wind is split into numbers:** direction, speed, gust, maximum crosswind and maximum tailwind, in knots.
+- **The full ATIS text** is on the main sensor, along with which fields changed in the latest broadcast.
+- **You can change airports at any time** from **Configure**, with no restart needed.
+- **Each airport updates on its own.** If one airport can't be reached, the others keep working.
+- Updates every 5 minutes.
 
-3. Select **Integration** category.
-4. Search for and install **Australian ATIS**.
-5. Restart Home Assistant.
-6. Go to **Settings → Devices & Services → Add Integration → Australian ATIS** and select airports.
+<!-- ha-marketplace:exclude-start -->
+## 🧰 Installation
 
-## 💡 Example Sensors
-Each selected airport creates sensors such as:
-- `sensor.ymml_atis`
-- `sensor.ymml_atis_wind`
-- `sensor.ymml_atis_temperature`
+Requires Home Assistant **2025.1** or newer.
 
-## 🗺 Supported Airports
-Sydney (YSSY), Melbourne (YMML), Brisbane (YBBN), Perth (YPPH), Adelaide (YPAD),  
-and many RAAF bases including Amberley, Tindal, and Richmond.
+### Marketplace (Home Assistant 2026.11 and newer)
 
----
+[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=BigByte76&repository=home-assistant-aussie-atis&category=integration)
 
-## 🔖 Version History
-- **v1.0.0** – Initial release with multi-airport support.
+1. Select the badge above. If the repository isn't listed yet, the Marketplace offers to add it as a custom repository.
+2. Select **Install**. The integration is available straight away, with no restart needed.
+
+### HACS (Home Assistant before 2026.11)
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=BigByte76&repository=home-assistant-aussie-atis&category=integration)
+
+1. Select the badge above, or in HACS open **⋮ → Custom repositories** and add `https://github.com/BigByte76/home-assistant-aussie-atis` with the category **Integration**.
+2. Install **Australian ATIS**, then restart Home Assistant.
+
+### Manual
+
+1. Copy `custom_components/aussie_atis` into your Home Assistant `config/custom_components/` folder.
+2. Restart Home Assistant.
+<!-- ha-marketplace:exclude-end -->
+
+## ⚙️ Setup
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=aussie_atis)
+
+1. Select the badge above, or go to **Settings → Devices & Services → Add Integration**.
+2. Search for **Australian ATIS**.
+3. Select the airports you want.
+
+To add or remove airports later, open the integration and choose **Configure**. When you remove an airport, its device and sensors are removed too.
+
+## 💡 Sensors
+
+Each airport creates a device named `<ICAO> ATIS`. For example, Melbourne (`YMML`) gives:
+
+| Entity | Example state |
+| --- | --- |
+| `sensor.ymml_atis` | `P`, the current information letter |
+| `sensor.ymml_atis_issued` | Time the ATIS was issued |
+| `sensor.ymml_atis_approach` | `EXP GLS OR ILS APCH` |
+| `sensor.ymml_atis_runway` | `16 FOR ARR. RWY 27 FOR DEP` |
+| `sensor.ymml_atis_arrival_runways` | `16` |
+| `sensor.ymml_atis_departure_runways` | `27` |
+| `sensor.ymml_atis_surface_condition` | `SFC COND CODE 5, 5, 5. WHOLE RWY WET.` |
+| `sensor.ymml_atis_operational_info` | `ABN UNSERVICEABLE AS PER NOTAM` |
+| `sensor.ymml_atis_wind` | `170/10, MAX TW 5 KTS RWY 27, MAX XW 12 KTS RWY 27` |
+| `sensor.ymml_atis_wind_direction` | `170` ° |
+| `sensor.ymml_atis_wind_speed` | `10` kn |
+| `sensor.ymml_atis_wind_gust` | gust speed in kn, when reported |
+| `sensor.ymml_atis_max_crosswind` | `12` kn |
+| `sensor.ymml_atis_max_tailwind` | `5` kn |
+| `sensor.ymml_atis_visibility` | `GT 10KM` |
+| `sensor.ymml_atis_weather` | `CAVOK` |
+| `sensor.ymml_atis_cloud` | `FEW025` |
+| `sensor.ymml_atis_temperature` | `12` °C |
+| `sensor.ymml_atis_qnh` | `1022` hPa |
+| `sensor.ymml_atis_significant_weather` | `TS IN AREA` |
+| `sensor.ymml_atis_metar` | Latest METAR/SPECI |
+| `sensor.ymml_atis_taf` | Latest TAF |
+
+The main `sensor.ymml_atis` sensor has these attributes:
+
+- `atis`: the complete ATIS broadcast text
+- `changed_fields`: fields marked as changed since the previous information letter
+- `other_info`: any extra lines, such as frequencies or "tower closed" notices
+
+**Notes**
+
+- Home Assistant limits a sensor's value to 255 characters. Longer text, such as most TAFs, is shortened, and the complete text is in the sensor's `full_text` attribute.
+- If a field isn't in the current ATIS, its sensor shows `unknown`.
+
+### Example: show the active runways on a dashboard
+
+```yaml
+type: entities
+title: Sydney ATIS
+entities:
+  - entity: sensor.yssy_atis
+  - entity: sensor.yssy_atis_arrival_runways
+  - entity: sensor.yssy_atis_departure_runways
+  - entity: sensor.yssy_atis_wind
+  - entity: sensor.yssy_atis_qnh
+```
+
+### Example: notify when the ATIS changes
+
+```yaml
+automation:
+  - alias: "Sydney ATIS changed"
+    triggers:
+      - trigger: state
+        entity_id: sensor.yssy_atis
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+    actions:
+      - action: notify.notify
+        data:
+          message: >
+            Sydney ATIS {{ states('sensor.yssy_atis') }}:
+            ARR {{ states('sensor.yssy_atis_arrival_runways') }},
+            DEP {{ states('sensor.yssy_atis_departure_runways') }}
+```
+
+## 🗺 Supported airports
+
+**Capital cities:** Sydney (YSSY), Melbourne (YMML), Brisbane (YBBN), Perth (YPPH), Adelaide (YPAD), Canberra (YSCB), Hobart (YMHB), Darwin (YPDN)
+
+**Regional:** Gold Coast (YBCG), Cairns (YBCS), Townsville (YBTL), Sunshine Coast (YBSU), Mackay (YBMK), Rockhampton (YBRK), Launceston (YMLT), Avalon (YMAV), Essendon (YMEN), Newcastle (YWLM), Alice Springs (YBAS), Karratha (YPKA), Port Hedland (YPPD), Learmonth (YPLM)
+
+**Military:** Amberley (YAMB), Oakey (YBOK), Curtin (YCIN), Gingin (YGIG), East Sale (YMES), Point Cook (YMPC), Pearce (YPEA), Edinburgh (YPED), Tindal (YPTN), Woomera (YPWR), Scherger (YBSG), Nowra (YSNW), Richmond (YSRI)
+
+Some regional and military airports only broadcast an ATIS while the tower is open. At other times their ATIS sensors show `unknown` or a "tower closed" message, but METAR and TAF keep updating.
+
+## ❓ Troubleshooting
+
+- **All of an airport's sensors are `unavailable`:** aussieadsb.com couldn't be reached for that airport. It retries every 5 minutes.
+- **A field shows `unknown`:** that field isn't in the airport's current ATIS.
+- **To see debug logs,** add this to `configuration.yaml`:
+
+  ```yaml
+  logger:
+    logs:
+      custom_components.aussie_atis: debug
+  ```
+
+<!-- ha-marketplace:exclude-start -->
+## 🧪 Development
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements_test.txt
+pytest
+```
+
+Development instructions for coding assistants are in [AGENTS.md](AGENTS.md).
+<!-- ha-marketplace:exclude-end -->
+
+## ⚠️ Disclaimer
+
+This integration is for information and hobby use only. It is **not** an official source and must not be used for flight planning or navigation. Always get official ATIS and weather information from Airservices Australia or the Bureau of Meteorology.
