@@ -1,0 +1,103 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Australian ATIS",
+        "description": "Choose the airports to monitor. Each airport becomes a device with one sensor per ATIS field.",
+        "data": {
+          "airports": "Airports"
+        },
+        "data_description": {
+          "airports": "Some airports (mostly military and regional) only publish an ATIS while the tower is open. Their METAR and TAF sensors still update."
+        }
+      }
+    },
+    "error": {
+      "no_airports": "Select at least one airport."
+    },
+    "abort": {
+      "single_instance_allowed": "Australian ATIS is already configured. Use Configure on the existing entry to change airports."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Australian ATIS",
+        "description": "Choose the airports to monitor. Devices for airports you remove are deleted.",
+        "data": {
+          "airports": "Airports"
+        }
+      }
+    },
+    "error": {
+      "no_airports": "Select at least one airport."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "issued": {
+        "name": "Issued"
+      },
+      "approach": {
+        "name": "Approach"
+      },
+      "runway": {
+        "name": "Runway"
+      },
+      "arrival_runways": {
+        "name": "Arrival runways"
+      },
+      "departure_runways": {
+        "name": "Departure runways"
+      },
+      "surface_condition": {
+        "name": "Surface condition"
+      },
+      "operational_info": {
+        "name": "Operational info"
+      },
+      "wind": {
+        "name": "Wind"
+      },
+      "wind_direction": {
+        "name": "Wind direction"
+      },
+      "wind_speed": {
+        "name": "Wind speed"
+      },
+      "wind_gust": {
+        "name": "Wind gust"
+      },
+      "max_crosswind": {
+        "name": "Max crosswind"
+      },
+      "max_tailwind": {
+        "name": "Max tailwind"
+      },
+      "visibility": {
+        "name": "Visibility"
+      },
+      "weather": {
+        "name": "Weather"
+      },
+      "cloud": {
+        "name": "Cloud"
+      },
+      "temperature": {
+        "name": "Temperature"
+      },
+      "qnh": {
+        "name": "QNH"
+      },
+      "sigwx": {
+        "name": "Significant weather"
+      },
+      "metar": {
+        "name": "METAR"
+      },
+      "taf": {
+        "name": "TAF"
+      }
+    }
+  }
+}

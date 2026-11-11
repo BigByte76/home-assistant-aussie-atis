@@ -1,0 +1,25 @@
+{
+  "entity": {
+    "sensor": {
+      "atis": { "default": "mdi:radio-tower" },
+      "approach": { "default": "mdi:airplane-marker" },
+      "runway": { "default": "mdi:road-variant" },
+      "arrival_runways": { "default": "mdi:airplane-landing" },
+      "departure_runways": { "default": "mdi:airplane-takeoff" },
+      "surface_condition": { "default": "mdi:water" },
+      "operational_info": { "default": "mdi:information-outline" },
+      "wind": { "default": "mdi:weather-windy" },
+      "wind_direction": { "default": "mdi:compass-outline" },
+      "wind_speed": { "default": "mdi:weather-windy" },
+      "wind_gust": { "default": "mdi:weather-windy-variant" },
+      "max_crosswind": { "default": "mdi:arrow-left-right" },
+      "max_tailwind": { "default": "mdi:arrow-down" },
+      "visibility": { "default": "mdi:eye" },
+      "weather": { "default": "mdi:weather-partly-cloudy" },
+      "cloud": { "default": "mdi:cloud" },
+      "sigwx": { "default": "mdi:weather-lightning" },
+      "metar": { "default": "mdi:file-document-outline" },
+      "taf": { "default": "mdi:file-document-multiple-outline" }
+    }
+  }
+}

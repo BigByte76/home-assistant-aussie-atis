@@ -1,8 +1,6 @@
 {
-  "name": "Aussie ATIS",
+  "name": "Australian ATIS",
   "content_in_root": false,
-  "domains": ["sensor"],
   "country": "AU",
-  "homeassistant": "2024.4.0",
-  "render_readme": true
+  "homeassistant": "2025.1.0"
 }
