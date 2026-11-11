@@ -89,7 +89,40 @@ The main `sensor.ymml_atis` sensor has these attributes:
 - Home Assistant limits a sensor's value to 255 characters. Longer text, such as most TAFs, is shortened, and the complete text is in the sensor's `full_text` attribute.
 - If a field isn't in the current ATIS, its sensor shows `unknown`.
 
-### Example: show the active runways on a dashboard
+## 🖥️ Dashboard cards
+
+There are two ready-made cards in the [`dashboards`](https://github.com/BigByte76/home-assistant-aussie-atis/tree/main/dashboards) folder. Both use Home Assistant's built-in Markdown card, so you don't need to install anything else.
+
+To add one, open your dashboard and choose **Edit dashboard → Add card → Manual**, then paste in the card's YAML.
+
+**[Airport card](https://github.com/BigByte76/home-assistant-aussie-atis/blob/main/dashboards/atis-airport-card.yaml)**
+
+The full picture for one airport:
+- information letter and how long ago it was issued
+- arrival and departure runways
+- approach, wind, visibility, weather, cloud, temperature and QNH
+- operational info and significant weather
+- METAR, plus the TAF in a section you can expand
+
+Fields that changed in the latest broadcast are marked 🔸. To pick the airport, change `set icao = 'yssy'` on the first line of `content`.
+
+```text
+### ✈️ Sydney (YSSY)
+## Information A
+Issued 4 minutes ago
+
+| 🛬 Arrivals   | 34L, 34R            |
+| 🛫 Departures | 34L, 34R            |
+| 💨 Wind       | 100/10 KTS,TW 5 KTS 🔸 |
+| QNH           | 1016 hPa 🔸          |
+…
+```
+
+**[Overview card](https://github.com/BigByte76/home-assistant-aussie-atis/blob/main/dashboards/atis-overview-card.yaml)**
+
+A table with one row per airport you've selected: ATIS letter, arrival and departure runways, wind and QNH. Airports you add later appear in the table automatically.
+
+### Example: a simple entities card
 
 ```yaml
 type: entities

@@ -1,0 +1,19 @@
+# Australian ATIS – all airports overview
+#
+# A Markdown card with one row per airport you've selected in the integration.
+# New airports appear automatically. Paste this into a dashboard:
+# Edit dashboard → Add card → Manual.
+type: markdown
+title: ATIS overview
+content: |-
+  {%- set mains = integration_entities('aussie_atis')
+       | select('match', '^sensor\\.[a-z0-9]{4}_atis$') | sort | list -%}
+  {%- if not mains -%}
+  No airports found. Add the Australian ATIS integration first.
+  {%- else -%}
+  | Airport | ATIS | 🛬 ARR | 🛫 DEP | 💨 Wind | QNH |
+  |:--|:-:|:--|:--|:--|:--|
+  {%- for p in mains %}
+  | **{{ p[7:11] | upper }}** {{ state_attr(p, 'airport') or '' }} | {{ states(p) if has_value(p) else '—' }} | {{ states(p ~ '_arrival_runways') if has_value(p ~ '_arrival_runways') else '—' }} | {{ states(p ~ '_departure_runways') if has_value(p ~ '_departure_runways') else '—' }} | {{ states(p ~ '_wind') if has_value(p ~ '_wind') else '—' }} | {{ states(p ~ '_qnh') if has_value(p ~ '_qnh') else '—' }} |
+  {%- endfor %}
+  {%- endif %}

@@ -62,4 +62,5 @@ CI (`.github/workflows/validate.yml`) runs on push, on pull requests and nightly
 
 - `tests/fixtures/*.html` are trimmed copies of real aussieadsb.com pages: just the h6 and monospace sections. They cover parallel runways (YSSY, YBBN), split runways (YMML, YMEN, YPAD), a tower-closed military ATIS (YAMB) and an airport with no ATIS (YBAS). When the site's format changes, capture a new page and trim it the same way.
 - The integration tests mock HTTP with `aioclient_mock` against `BASE_URL`.
+- `dashboards/*.yaml` are example Markdown cards whose `content` is a Home Assistant template. `tests/test_dashboards.py` renders them against the fixtures. If you rename a sensor key or change an attribute, update the cards and these tests too. Use `content: |-` (a literal block): `>-` folds lines together and breaks the Markdown tables.
 - To test an older Home Assistant, install `homeassistant==<version>` alongside `pytest-homeassistant-custom-component` in a separate venv. Pin `pycares<4.9` for 2025.x: newer pycares starts a background thread that the old harness reports as a lingering-thread error.
