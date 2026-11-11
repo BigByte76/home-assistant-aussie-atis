@@ -1,0 +1,85 @@
+# Australian ATIS – single airport card
+#
+# A Markdown card that shows the current ATIS for one airport.
+# Change the ICAO code on the first line of `content` (lowercase), then paste
+# this into a dashboard: Edit dashboard → Add card → Manual.
+type: markdown
+content: |-
+  {%- set icao = 'yssy' -%}
+
+  {%- set p = 'sensor.' ~ icao ~ '_atis' -%}
+  {%- set changed = state_attr(p, 'changed_fields') or [] -%}
+  {%- macro v(key) -%}
+    {%- set e = p ~ '_' ~ key -%}
+    {%- if has_value(e) -%}{{ state_attr(e, 'full_text') or states(e) }}{%- else -%}—{%- endif -%}
+  {%- endmacro -%}
+  {%- macro u(key) -%}
+    {%- set e = p ~ '_' ~ key -%}
+    {%- if has_value(e) -%}{{ states(e) }} {{ state_attr(e, 'unit_of_measurement') }}{%- else -%}—{%- endif -%}
+  {%- endmacro -%}
+  {%- macro c(field) -%}{{ ' 🔸' if field in changed }}{%- endmacro -%}
+
+  {%- if not has_value(p ~ '_metar') and not has_value(p) %}
+  ### ✈️ {{ icao | upper }}
+
+  ⚠️ No data. Check that **{{ icao | upper }}** is selected in the Australian ATIS integration.
+  {%- else %}
+  ### ✈️ {{ state_attr(p, 'airport') or icao | upper }} ({{ icao | upper }})
+
+  {%- if has_value(p) %}
+
+  ## Information {{ states(p) }}
+
+  {% if has_value(p ~ '_issued') -%}
+  Issued {{ relative_time(as_datetime(states(p ~ '_issued'))) }} ago
+  {%- endif %}
+
+  | | |
+  |:--|:--|
+  | 🛬 **Arrivals** | **{{ v('arrival_runways') }}**{{ c('runway') }} |
+  | 🛫 **Departures** | **{{ v('departure_runways') }}**{{ c('runway') }} |
+  | Approach | {{ v('approach') }}{{ c('approach') }} |
+  | 💨 Wind | {{ v('wind') }}{{ c('wind') }} |
+  | Visibility | {{ v('visibility') }}{{ c('visibility') }} |
+  | Weather | {{ v('weather') }}{{ c('weather') }} |
+  | Cloud | {{ v('cloud') }}{{ c('cloud') }} |
+  | 🌡️ Temperature | {{ u('temperature') }}{{ c('temperature') }} |
+  | QNH | {{ u('qnh') }}{{ c('qnh') }} |
+
+  {%- if has_value(p ~ '_operational_info') %}
+
+  **Operational info**{{ c('operational_info') }}: {{ v('operational_info') }}
+  {%- endif %}
+  {%- if has_value(p ~ '_significant_weather') %}
+
+  ⛈️ **Significant weather**{{ c('sigwx') }}: {{ v('significant_weather') }}
+  {%- endif %}
+  {%- if state_attr(p, 'other_info') %}
+
+  ℹ️ {{ state_attr(p, 'other_info') }}
+  {%- endif %}
+  {%- if changed %}
+
+  <sub>🔸 changed in this broadcast</sub>
+  {%- endif %}
+  {%- else %}
+
+  No ATIS is being broadcast right now. The tower may be closed.
+  {%- endif %}
+  {%- if has_value(p ~ '_metar') %}
+
+  **METAR**
+  ```
+  {{ v('metar') }}
+  ```
+  {%- endif %}
+  {%- if has_value(p ~ '_taf') %}
+
+  <details><summary><b>TAF</b></summary>
+
+  ```
+  {{ v('taf') }}
+  ```
+  </details>
+  {%- endif %}
+  {%- endif %}
