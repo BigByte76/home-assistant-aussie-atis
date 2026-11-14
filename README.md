@@ -83,6 +83,8 @@ The main `sensor.ymml_atis` sensor has these attributes:
 - `atis`: the complete ATIS broadcast text
 - `changed_fields`: fields marked as changed since the previous information letter
 - `other_info`: any extra lines, such as frequencies or "tower closed" notices
+- `arrival_runways` and `departure_runways`: the runways in use, as lists, e.g. `["34L", "34R"]`
+- `runways`: the airport's runway layout, for cards that draw the airport. Each runway has an `ident` (`16/34`), `length` and `width` in metres, a `surface`, and two `ends`, each with an `ident`, `latitude`, `longitude` and `heading`. This attribute isn't saved in the recorder history.
 
 **Notes**
 

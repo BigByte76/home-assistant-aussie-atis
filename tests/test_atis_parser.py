@@ -151,3 +151,60 @@ def test_negative_temperature_and_previous_month_stamp() -> None:
     assert atis.temperature == -2
     assert atis.qnh == 998
     assert atis.issued == datetime(2026, 11, 30, 23, 50, tzinfo=UTC)
+
+
+def test_runway_layout_from_page_model() -> None:
+    runways = load("ymml").runways
+    assert [runway.ident for runway in runways] == ["09/27", "16/34"]
+    main = runways[1]
+    assert (main.length, main.width, main.surface) == (3657, 60, "asphalt")
+    low, high = main.ends
+    assert (low.ident, low.heading) == ("16", 160)
+    assert (high.ident, high.heading) == ("34", 340)
+    assert low.latitude == pytest.approx(-37.653198)
+    assert low.longitude == pytest.approx(144.835007)
+    # The JSON-friendly form is what the sensor attribute exposes.
+    assert main.as_dict()["ends"][1] == {
+        "ident": "34",
+        "latitude": pytest.approx(-37.685799),
+        "longitude": pytest.approx(144.841003),
+        "heading": 340,
+    }
+
+
+def test_runway_layout_parallel_runways_and_no_atis() -> None:
+    sydney = load("yssy").runways
+    assert [end.ident for runway in sydney for end in runway.ends] == ["07", "25", "16L", "34R", "16R", "34L"]
+    # The layout doesn't depend on an ATIS being broadcast.
+    alice = load("ybas")
+    assert alice.atis is None
+    assert [runway.ident for runway in alice.runways] == ["12/30", "17/35"]
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "<html></html>",  # no model at all
+        "loadModel({not json}))",
+        "loadModel([1, 2]))",
+        'loadModel({"runways": null}))',
+        'loadModel({"runways": ["x", {"leIdent": "16"}]}))',  # no coordinates
+        'loadModel({"runways": [{"leIdent": "16", "leLocation": {"lat": 1, "lng": 2},'
+        ' "heIdent": "34", "heLocation": null}]}))',  # one end missing
+    ],
+)
+def test_runway_layout_is_empty_when_missing_or_malformed(page: str) -> None:
+    info = parse_airport_page(page, now=NOW)
+    assert info.runways == ()
+    assert info.atis is None
+
+
+def test_runway_layout_defaults_for_missing_details() -> None:
+    page = (
+        'loadModel({"runways": [{"surface": 99, "leIdent": "09", "leLocation": {"lat": -1.5, "lng": 2},'
+        ' "heIdent": "27", "heLocation": {"lat": -1.5, "lng": 2.1}}]}))'
+    )
+    (runway,) = parse_airport_page(page, now=NOW).runways
+    assert runway.ident == "09/27"
+    assert (runway.length, runway.width, runway.surface) == (None, None, "unknown")
+    assert runway.ends[0].heading is None
