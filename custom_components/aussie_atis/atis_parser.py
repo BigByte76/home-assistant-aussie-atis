@@ -9,9 +9,24 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 import html
+import json
 import re
 
 _SECTION_TEMPLATE = r"<h6>\s*{title}\s*</h6>.*?<p class=\"monospace\">(.*?)</p>"
+
+# The page passes its data to a script as ``loadModel({...})``. The JSON holds
+# the runway layout (threshold coordinates, headings, width, surface).
+_MODEL_MARKER = "loadModel("
+
+# AussieADSB's runway surface codes. Anything else is "unknown".
+_SURFACES: dict[int, str] = {
+    1: "asphalt",
+    3: "concrete",
+    4: "grass",
+    5: "gravel",
+    6: "water",
+    7: "dirt",
+}
 
 # ATIS header, e.g. "ATIS YSSY A   110913" (ICAO, information letter, DDHHMM UTC).
 _HEADER_RE = re.compile(r"^ATIS\s+(?P<icao>[A-Z]{4})\s+(?P<code>[A-Z])\b\s*(?P<time>\d{6})?")
@@ -95,12 +110,52 @@ class AtisReport:
 
 
 @dataclass(frozen=True, slots=True)
+class RunwayEnd:
+    """One end of a runway, e.g. the "16" end of 16/34."""
+
+    ident: str
+    latitude: float
+    longitude: float
+    heading: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Runway:
+    """The physical layout of one runway."""
+
+    ident: str
+    ends: tuple[RunwayEnd, RunwayEnd]
+    length: int | None = None
+    width: int | None = None
+    surface: str = "unknown"
+
+    def as_dict(self) -> dict[str, object]:
+        """Return a JSON-friendly form, used for the sensor attribute."""
+        return {
+            "ident": self.ident,
+            "length": self.length,
+            "width": self.width,
+            "surface": self.surface,
+            "ends": [
+                {
+                    "ident": end.ident,
+                    "latitude": end.latitude,
+                    "longitude": end.longitude,
+                    "heading": end.heading,
+                }
+                for end in self.ends
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class AirportInfo:
     """Everything published for one airport."""
 
     atis: AtisReport | None
     metar: str | None
     taf: str | None
+    runways: tuple[Runway, ...] = ()
 
 
 def parse_airport_page(page: str, now: datetime | None = None) -> AirportInfo:
@@ -111,7 +166,71 @@ def parse_airport_page(page: str, now: datetime | None = None) -> AirportInfo:
         atis=parse_atis(atis_text, now) if atis_text else None,
         metar=_section(page, "METAR/SPECI"),
         taf=_section(page, "TAF"),
+        runways=parse_runway_layout(page),
     )
+
+
+def parse_runway_layout(page: str) -> tuple[Runway, ...]:
+    """Read the runway layout from the page's embedded ``loadModel({...})`` JSON.
+
+    Runways without coordinates for both ends are skipped, because they can't
+    be drawn. Any problem with the JSON gives an empty layout rather than an
+    error: the layout is optional and must never break the ATIS sensors.
+    """
+    start = page.find(_MODEL_MARKER)
+    if start < 0:
+        return ()
+    try:
+        model, _ = json.JSONDecoder().raw_decode(page, start + len(_MODEL_MARKER))
+    except ValueError:
+        return ()
+    if not isinstance(model, dict) or not isinstance(model.get("runways"), list):
+        return ()
+
+    runways: list[Runway] = []
+    for raw in model["runways"]:
+        if not isinstance(raw, dict):
+            continue
+        low = _runway_end(raw, "le")
+        high = _runway_end(raw, "he")
+        if low is None or high is None:
+            continue
+        runways.append(
+            Runway(
+                ident=str(raw.get("ident") or f"{low.ident}/{high.ident}"),
+                ends=(low, high),
+                length=_int_or_none(raw.get("length")),
+                width=_int_or_none(raw.get("width")),
+                surface=_SURFACES.get(raw.get("surface"), "unknown"),  # type: ignore[arg-type]
+            )
+        )
+    return tuple(runways)
+
+
+def _runway_end(raw: dict[str, object], prefix: str) -> RunwayEnd | None:
+    """Build one runway end from the ``le*``/``he*`` keys, or None if incomplete."""
+    ident = raw.get(f"{prefix}Ident")
+    location = raw.get(f"{prefix}Location")
+    if not isinstance(ident, str) or not ident or not isinstance(location, dict):
+        return None
+    latitude, longitude = location.get("lat"), location.get("lng")
+    if not _is_number(latitude) or not _is_number(longitude):
+        return None
+    heading = raw.get(f"{prefix}Heading")
+    return RunwayEnd(
+        ident=ident,
+        latitude=float(latitude),  # type: ignore[arg-type]
+        longitude=float(longitude),  # type: ignore[arg-type]
+        heading=float(heading) if _is_number(heading) else None,  # type: ignore[arg-type]
+    )
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _int_or_none(value: object) -> int | None:
+    return round(value) if _is_number(value) else None  # type: ignore[arg-type]
 
 
 def parse_atis(text: str, now: datetime | None = None) -> AtisReport:

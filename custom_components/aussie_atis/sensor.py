@@ -218,8 +218,9 @@ class AtisSensor(CoordinatorEntity[AtisCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_attribution = ATTRIBUTION
-    # Large text attributes would bloat the recorder database.
-    _unrecorded_attributes = frozenset({"atis", "full_text"})
+    # Large text attributes, and the static runway layout, would bloat the
+    # recorder database.
+    _unrecorded_attributes = frozenset({"atis", "full_text", "runways"})
 
     entity_description: AtisSensorEntityDescription
 
@@ -274,6 +275,11 @@ class AtisSensor(CoordinatorEntity[AtisCoordinator], SensorEntity):
                 "atis": atis.text if atis else None,
                 "changed_fields": list(atis.changed_fields) if atis else [],
                 "other_info": atis.other_info if atis else None,
+                # For dashboard cards that draw the airport: the active runways
+                # as lists, and the layout of every runway.
+                "arrival_runways": list(atis.arrival_runways) if atis else [],
+                "departure_runways": list(atis.departure_runways) if atis else [],
+                "runways": [runway.as_dict() for runway in info.runways],
             }
         if self.entity_description.long_text:
             return {"full_text": self.entity_description.value_fn(info)}

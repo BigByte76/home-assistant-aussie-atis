@@ -62,6 +62,14 @@ async def test_setup_creates_individual_sensors_and_unloads(
     assert main.attributes["atis"].startswith("ATIS YSSY A")
     assert hass.states.get("sensor.yssy_atis_issued").state == "2026-11-11T09:13:00+00:00"
 
+    # Lists and the runway layout, for dashboard cards that draw the airport.
+    assert main.attributes["arrival_runways"] == ["34L", "34R"]
+    assert main.attributes["departure_runways"] == ["34L", "34R"]
+    layout = main.attributes["runways"]
+    assert [runway["ident"] for runway in layout] == ["07/25", "16L/34R", "16R/34L"]
+    assert layout[1]["ends"][0]["ident"] == "16L"
+    assert layout[1]["surface"] == "asphalt"
+
     # The TAF is longer than a state allows: truncated state, full attribute.
     taf = hass.states.get("sensor.ybbn_atis_taf")
     assert len(taf.state) <= 255
