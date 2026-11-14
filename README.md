@@ -13,6 +13,7 @@ Each airport you pick becomes a device, and every part of its ATIS is a separate
 - **You can change airports at any time** from **Configure**, with no restart needed.
 - **Each airport updates on its own.** If one airport can't be reached, the others keep working.
 - Updates every 5 minutes.
+- **An animated runway card** is available separately: the [Aussie ATIS Lovelace Card](https://github.com/BigByte76/aussie-atis-lovelace-card) draws each airport and shows which runways are in use.
 
 <!-- ha-marketplace:exclude-start -->
 ## 🧰 Installation
@@ -93,7 +94,24 @@ The main `sensor.ymml_atis` sensor has these attributes:
 
 ## 🖥️ Dashboard cards
 
-There are two ready-made cards in the [`dashboards`](https://github.com/BigByte76/home-assistant-aussie-atis/tree/main/dashboards) folder. Both use Home Assistant's built-in Markdown card, so you don't need to install anything else.
+### Aussie ATIS Lovelace Card
+
+For a live picture of the airport, install the [Aussie ATIS Lovelace Card](https://github.com/BigByte76/aussie-atis-lovelace-card). It draws the airport's runways to scale and animates the ones in use: arrivals in green, departures in blue, with aircraft flying the approaches and climb-outs. Wind drifts across the map, and the ATIS details are shown underneath.
+
+![The Aussie ATIS Lovelace Card for Sydney, Melbourne and Brisbane](https://raw.githubusercontent.com/BigByte76/aussie-atis-lovelace-card/main/images/preview-light.png)
+
+It's installed separately from the Marketplace or HACS as a custom repository; see the card's [installation instructions](https://github.com/BigByte76/aussie-atis-lovelace-card#-installation). Then add one card per airport:
+
+```yaml
+type: custom:aussie-atis-card
+airport: ymml
+```
+
+From version 2.1.0, this integration provides each airport's runway layout for the card, in the main sensor's `runways` attribute. With older versions, the card uses its own built-in layouts.
+
+### Markdown cards
+
+There are also two ready-made cards in the [`dashboards`](https://github.com/BigByte76/home-assistant-aussie-atis/tree/main/dashboards) folder. Both use Home Assistant's built-in Markdown card, so you don't need to install anything else.
 
 To add one, open your dashboard and choose **Edit dashboard → Add card → Manual**, then paste in the card's YAML.
 
