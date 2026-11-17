@@ -8,7 +8,14 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.aussie_atis.const import ATFM_URL, BASE_URL, CONF_AIRPORTS, CONF_ATFM, DOMAIN
+from custom_components.aussie_atis.const import (
+    ATFM_URL,
+    BASE_URL,
+    CONF_AIRPORTS,
+    CONF_ATFM,
+    DOMAIN,
+    atfm_store_key,
+)
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
@@ -19,6 +26,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 PLAN = (FIXTURES / "atfm_daily_plan.pdf").read_bytes()
 # 13:30 in Sydney on the plan day.
 NOW = datetime(2026, 11, 18, 2, 30, tzinfo=UTC)
+ENTRY_ID = "atis_entry"
+STORE_KEY = atfm_store_key(ENTRY_ID)
 
 
 @pytest.fixture(autouse=True)
@@ -42,7 +51,7 @@ async def setup(
     for code in airports:
         aioclient_mock.get(BASE_URL.format(code=code.lower()), text=(FIXTURES / "yssy.html").read_text())
     aioclient_mock.get(ATFM_URL, content=PLAN if atfm_status == 200 else b"", status=atfm_status)
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_AIRPORTS: airports, CONF_ATFM: atfm})
+    entry = MockConfigEntry(domain=DOMAIN, entry_id=ENTRY_ID, data={CONF_AIRPORTS: airports, CONF_ATFM: atfm})
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     # The first ATFM download runs as a background task.
@@ -230,3 +239,84 @@ async def test_options_toggle_adds_and_removes_sensors(
     # The ATIS sensors are untouched.
     assert entity_registry.async_get("sensor.yssy_atis") is not None
     assert hass.states.get("sensor.yssy_atis").state == "A"
+
+
+def saved_hour(day: int, hour: int, mode: str, rate: int, note: str | None = None) -> dict:
+    return {
+        "start": datetime(2026, 11, day, hour, tzinfo=UTC).isoformat(),
+        "runway_mode": mode,
+        "runways": [mode.split()[0]],
+        "mode_code": mode.split()[1],
+        "arrival_rate": rate,
+        "notes": [1] if note else [],
+        "metcdm_notes": [{"number": 1, "start": None, "end": None, "text": note}] if note else [],
+    }
+
+
+async def test_saved_hours_survive_a_restart(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+    hass_storage: dict,
+) -> None:
+    # 21:30 in Sydney the evening before: only the next day's plan (from
+    # 06:00) can be downloaded, but today's was saved before the restart.
+    freezer.move_to(datetime(2026, 11, 17, 10, 30, tzinfo=UTC))
+    hass_storage[STORE_KEY] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": STORE_KEY,
+        "data": {
+            "hours": {
+                "YSSY": [
+                    saved_hour(17, 10, "16 PROPS", 36, "Today's note."),
+                    saved_hour(17, 11, "16 PROPS", 32),
+                    # Overlaps the new plan, which takes precedence.
+                    saved_hour(17, 19, "16 PROPS", 1),
+                ],
+                "YXXX": "unreadable",
+            }
+        },
+    }
+    await setup(hass, aioclient_mock, ["YSSY", "YMML"])
+
+    assert hass.states.get("sensor.yssy_atis_atfm_runway_mode").state == "16 PROPS"
+    assert hass.states.get("sensor.yssy_atis_atfm_arrival_rate").state == "36"
+    # The note from today's plan, not note 1 of the new plan.
+    assert hass.states.get("sensor.yssy_atis_atfm_notes").state == "Today's note."
+    forecast = hass.states.get("sensor.yssy_atis_atfm_plan").attributes["forecast"]
+    assert [hour["start"] for hour in forecast[:3]] == [
+        "2026-11-17T21:00:00+11:00",
+        "2026-11-17T22:00:00+11:00",
+        "2026-11-18T06:00:00+11:00",
+    ]
+    assert forecast[2]["arrival_rate"] == 34
+    # Nothing was saved for Melbourne.
+    assert hass.states.get("sensor.ymml_atis_atfm_runway_mode").state == STATE_UNKNOWN
+
+    # The merged plan is saved again, without hours that have ended.
+    await hass.async_block_till_done()
+    saved = hass_storage[STORE_KEY]["data"]["hours"]
+    assert saved["YSSY"][0] == saved_hour(17, 10, "16 PROPS", 36, "Today's note.")
+    assert saved["YMML"][0]["start"] == "2026-11-17T19:00:00+00:00"
+    assert "YXXX" not in saved
+
+
+async def test_restart_without_saved_hours(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(datetime(2026, 11, 17, 10, 30, tzinfo=UTC))
+    await setup(hass, aioclient_mock, ["YSSY"])
+    assert hass.states.get("sensor.yssy_atis_atfm_runway_mode").state == STATE_UNKNOWN
+    assert hass.states.get("sensor.yssy_atis_atfm_plan").state == "2026-11-18"
+
+
+async def test_removing_the_entry_deletes_saved_hours(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_storage: dict
+) -> None:
+    entry = await setup(hass, aioclient_mock, ["YSSY"])
+    await hass.async_block_till_done()
+    assert STORE_KEY in hass_storage
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert STORE_KEY not in hass_storage

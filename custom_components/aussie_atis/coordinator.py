@@ -10,20 +10,23 @@ import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .atfm_parser import DailyPlan, carry_over_hours, parse_daily_plan
+from .atfm_parser import DailyPlan, carry_over_hours, hours_to_json, parse_daily_plan, plan_from_hours_json
 from .atis_parser import AirportInfo, parse_airport_page
 from .const import (
     ATFM_REQUEST_TIMEOUT,
     ATFM_RETRY_INTERVAL,
     ATFM_SCAN_INTERVAL,
+    ATFM_STORE_VERSION,
     ATFM_URL,
     BASE_URL,
     DOMAIN,
     REQUEST_TIMEOUT,
     SCAN_INTERVAL,
+    atfm_store_key,
 )
 
 if TYPE_CHECKING:
@@ -96,6 +99,10 @@ class AtfmCoordinator(DataUpdateCoordinator[DailyPlan]):
     The plan covers a whole day, so after a failed download the last plan is
     kept (its hourly values are still valid) and the download is retried
     sooner than usual.
+
+    The hours that haven't ended are saved after every download. The next
+    day's plan replaces the current one for download in the evening, so after
+    a restart the saved hours are the only source for the rest of today.
     """
 
     config_entry: AtisConfigEntry
@@ -110,8 +117,17 @@ class AtfmCoordinator(DataUpdateCoordinator[DailyPlan]):
             update_interval=ATFM_SCAN_INTERVAL,
         )
         self._session = async_get_clientsession(hass)
+        self._store: Store[dict] = Store(hass, ATFM_STORE_VERSION, atfm_store_key(entry.entry_id))
+        # Hours saved before the last restart, used once for the first plan.
+        self._saved: DailyPlan | None = None
+        self._loaded = False
 
     async def _async_update_data(self) -> DailyPlan:
+        if not self._loaded:
+            self._loaded = True
+            stored = await self._store.async_load()
+            if isinstance(stored, dict):
+                self._saved = plan_from_hours_json(stored.get("hours"))
         try:
             plan = await self._async_fetch()
         except UpdateFailed as err:
@@ -121,8 +137,12 @@ class AtfmCoordinator(DataUpdateCoordinator[DailyPlan]):
             _LOGGER.warning("Unable to update the ATFM Daily Plan, keeping the last one: %s", err)
             return self.data
         self.update_interval = ATFM_SCAN_INTERVAL
-        if self.data is not None:
-            carry_over_hours(self.data, plan, dt_util.utcnow())
+        now = dt_util.utcnow()
+        if (previous := self.data or self._saved) is not None:
+            carry_over_hours(previous, plan, now)
+        self._saved = None
+        # Write errors are logged by Store and don't fail the update.
+        await self._store.async_save({"hours": hours_to_json(plan, now)})
         return plan
 
     async def _async_fetch(self) -> DailyPlan:
