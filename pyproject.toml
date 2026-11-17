@@ -12,5 +12,5 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
-known-first-party = ["homeassistant", "custom_components", "atis_parser"]
+known-first-party = ["homeassistant", "custom_components", "atfm_parser", "atis_parser"]
 combine-as-imports = true

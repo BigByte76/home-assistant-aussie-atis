@@ -6,7 +6,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.aussie_atis.const import BASE_URL, CONF_AIRPORTS, DOMAIN
+from custom_components.aussie_atis.const import ATFM_URL, BASE_URL, CONF_AIRPORTS, CONF_ATFM, DOMAIN
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -19,6 +19,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow Home Assistant to load the integration from custom_components."""
+
+
+@pytest.fixture(autouse=True)
+def mock_atfm_plan(aioclient_mock: AiohttpClientMocker) -> None:
+    """Serve the ATFM Daily Plan, for tests that turn it on."""
+    aioclient_mock.get(ATFM_URL, content=(FIXTURES / "atfm_daily_plan.pdf").read_bytes())
 
 
 def mock_page(aioclient_mock: AiohttpClientMocker, code: str, status: int = 200) -> None:
@@ -141,7 +147,7 @@ async def test_config_flow(hass: HomeAssistant, aioclient_mock: AiohttpClientMoc
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_AIRPORTS: ["YMML"]})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_AIRPORTS: ["YMML"]}
+    assert result["data"] == {CONF_AIRPORTS: ["YMML"], CONF_ATFM: False}
     await hass.async_block_till_done()
     assert hass.states.get("sensor.ymml_atis_departure_runways").state == "27"
 

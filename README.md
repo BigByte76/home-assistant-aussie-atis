@@ -1,6 +1,6 @@
 # 🇦🇺 Australian ATIS for Home Assistant
 
-Live **ATIS**, **METAR** and **TAF** for major Australian civil and military airports in Home Assistant. Data comes from [Aussie ADS-B](https://aussieadsb.com).
+Live **ATIS**, **METAR** and **TAF** for major Australian civil and military airports in Home Assistant. Data comes from [Aussie ADS-B](https://aussieadsb.com). For Sydney, Melbourne, Brisbane and Perth there's also the day's planned runway mode and arrival rate, from the Airservices Australia [ATFM Daily Plan](https://www.airservicesaustralia.com/noc/).
 
 Each airport you pick becomes a device, and every part of its ATIS is a separate sensor: active runways, wind, QNH, temperature and so on. You can add them to dashboards, graph them, or use them in automations.
 
@@ -12,7 +12,8 @@ Each airport you pick becomes a device, and every part of its ATIS is a separate
 - **The full ATIS text** is on the main sensor, along with which fields changed in the latest broadcast.
 - **You can change airports at any time** from **Configure**, with no restart needed.
 - **Each airport updates on its own.** If one airport can't be reached, the others keep working.
-- Updates every 5 minutes.
+- **ATFM Daily Plan** for YSSY, YMML, YBBN and YPPH: the planned runway mode and arrivals per hour, hour by hour in your local time, plus ground delay programs and the plan's notes.
+- ATIS updates every 5 minutes. The ATFM Daily Plan is checked every 6 hours.
 - **An animated runway card** is available separately: the [Aussie ATIS Lovelace Card](https://github.com/BigByte76/aussie-atis-lovelace-card) draws each airport and shows which runways are in use.
 
 <!-- ha-marketplace:exclude-start -->
@@ -47,8 +48,9 @@ Requires Home Assistant **2025.1** or newer.
 1. Select the badge above, or go to **Settings → Devices & Services → Add Integration**.
 2. Search for **Australian ATIS**.
 3. Select the airports you want.
+4. To get the ATFM Daily Plan for Sydney, Melbourne, Brisbane or Perth, turn on **Include ATFM Daily Plan**. It's off by default.
 
-To add or remove airports later, open the integration and choose **Configure**. When you remove an airport, its device and sensors are removed too.
+To add or remove airports, or turn the ATFM Daily Plan on or off, open the integration and choose **Configure**. When you remove an airport, its device and sensors are removed too, and turning the ATFM Daily Plan off removes its sensors.
 
 ## 💡 Sensors
 
@@ -86,6 +88,27 @@ The main `sensor.ymml_atis` sensor has these attributes:
 - `other_info`: any extra lines, such as frequencies or "tower closed" notices
 - `arrival_runways` and `departure_runways`: the runways in use, as lists, e.g. `["34L", "34R"]`
 - `runways`: the airport's runway layout, for cards that draw the airport. Each runway has an `ident` (`16/34`), `length` and `width` in metres, a `surface`, and two `ends`, each with an `ident`, `latitude`, `longitude` and `heading`. This attribute isn't saved in the recorder history.
+
+### ATFM Daily Plan sensors
+
+Airservices Australia publishes the ATFM (air traffic flow management) Daily Plan each evening for the next day, for Sydney, Melbourne, Brisbane and Perth. If you turn on **Include ATFM Daily Plan** and select any of these airports, their devices get five more sensors. For Sydney:
+
+| Entity | Example state |
+| --- | --- |
+| `sensor.yssy_atis_atfm_plan` | `2026-11-18`, the day the plan is for |
+| `sensor.yssy_atis_atfm_runway_mode` | `34 DVAA`, the planned runway mode for the current hour |
+| `sensor.yssy_atis_atfm_arrival_rate` | `44` arrivals/h, the planned arrival rate for the current hour |
+| `sensor.yssy_atis_atfm_ground_delay_program` | `GDP-A`, or `None` if no ground delay program is planned |
+| `sensor.yssy_atis_atfm_notes` | The Bureau of Meteorology's notes for the current hour |
+
+The plan's times are in UTC. The sensors convert them to your Home Assistant time zone, and give them as ISO 8601 times such as `2026-11-18T06:00:00+11:00`.
+
+- `atfm_plan` has a `forecast` attribute: one entry per hour, with `start`, `end`, `runway_mode`, `runways` (e.g. `["16", "27"]`), `mode_code` (the rest of the runway mode, e.g. `VMCA`), `arrival_rate` and `notes` (the numbers of the notes that apply). It also has the plan's `version` and `change_summary`.
+- `atfm_runway_mode` and `atfm_arrival_rate` have `next_change`, the time of the next planned change, and `next_runway_mode` or `next_arrival_rate`.
+- `atfm_ground_delay_program` has `programs` (each with a `name`, `start` and `end`), `total_movements`, `affected_flights`, `total_ground_delay_minutes`, `average_ground_delay_minutes` and `gdp_notes`.
+- `atfm_notes` has all of the plan's `metcdm_notes` (weather), `sm_notes` (shift manager) and `dlm_notes`, each with a `number`, `start`, `end` and `text`.
+
+The current-hour sensors change on the hour. Each day's plan runs from early morning until about midnight at the airport. When the next day's plan is downloaded in the evening, the rest of the current day's hours are kept, so the sensors only show `unknown` overnight, between one plan ending and the next starting.
 
 **Notes**
 
@@ -142,6 +165,21 @@ Issued 4 minutes ago
 
 A table with one row per airport you've selected: ATIS letter, arrival and departure runways, wind and QNH. Airports you add later appear in the table automatically.
 
+**[ATFM plan card](https://github.com/BigByte76/home-assistant-aussie-atis/blob/main/dashboards/atfm-plan-card.yaml)**
+
+The ATFM Daily Plan for YSSY, YMML, YBBN or YPPH: the planned runway mode and arrival rate for each hour in your local time, with the current hour marked, and any ground delay program. To pick the airport, change `set icao = 'yssy'` on the first line of `content`.
+
+```text
+### 🗓️ ATFM plan YPPH, Wed 18 Nov
+Version 1
+⏳ Ground delay program: GDP-A 11:00–01:00, 208 flights affected, average delay 8.9 min
+
+| Time      | Runway mode | Arrivals/h |
+| 12:00     | 21 VMC      | 24 |
+| ▶ 13:00   | 21/24 VMC   | 25 |
+…
+```
+
 ### Example: a simple entities card
 
 ```yaml
@@ -189,6 +227,7 @@ Some regional and military airports only broadcast an ATIS while the tower is op
 
 - **All of an airport's sensors are `unavailable`:** aussieadsb.com couldn't be reached for that airport. It retries every 5 minutes.
 - **A field shows `unknown`:** that field isn't in the airport's current ATIS.
+- **The ATFM sensors are `unavailable`:** the ATFM Daily Plan hasn't been downloaded yet, or couldn't be read. It retries every 30 minutes. Once a plan has been read, it's kept if a later download fails.
 - **To see debug logs,** add this to `configuration.yaml`:
 
   ```yaml
@@ -212,3 +251,5 @@ Development instructions for coding assistants are in [AGENTS.md](AGENTS.md).
 ## ⚠️ Disclaimer
 
 This integration is for information and hobby use only. It is **not** an official source and must not be used for flight planning or navigation. Always get official ATIS and weather information from Airservices Australia or the Bureau of Meteorology.
+
+The ATFM Daily Plan is a snapshot: Airservices revises it during the day, and this integration only checks for a new version every 6 hours. For current flow management information, use Airservices' METCDM.

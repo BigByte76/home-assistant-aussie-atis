@@ -15,9 +15,12 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/BigByte76/home-assistant-aussie-atis/issues",
   "loggers": [
-    "custom_components.aussie_atis"
+    "custom_components.aussie_atis",
+    "pypdf"
   ],
-  "requirements": [],
+  "requirements": [
+    "pypdf==7.1.0"
+  ],
   "single_config_entry": true,
   "version": "2.1.0"
 }

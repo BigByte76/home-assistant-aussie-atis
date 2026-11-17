@@ -11,9 +11,20 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
+from .atfm_parser import DailyPlan, carry_over_hours, parse_daily_plan
 from .atis_parser import AirportInfo, parse_airport_page
-from .const import BASE_URL, DOMAIN, REQUEST_TIMEOUT, SCAN_INTERVAL
+from .const import (
+    ATFM_REQUEST_TIMEOUT,
+    ATFM_RETRY_INTERVAL,
+    ATFM_SCAN_INTERVAL,
+    ATFM_URL,
+    BASE_URL,
+    DOMAIN,
+    REQUEST_TIMEOUT,
+    SCAN_INTERVAL,
+)
 
 if TYPE_CHECKING:
     from . import AtisConfigEntry
@@ -77,3 +88,55 @@ class AtisCoordinator(DataUpdateCoordinator[dict[str, AirportInfo]]):
         except (aiohttp.ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching {url}: {err or type(err).__name__}") from err
         return parse_airport_page(page)
+
+
+class AtfmCoordinator(DataUpdateCoordinator[DailyPlan]):
+    """Fetch the ATFM Daily Plan every few hours.
+
+    The plan covers a whole day, so after a failed download the last plan is
+    kept (its hourly values are still valid) and the download is retried
+    sooner than usual.
+    """
+
+    config_entry: AtisConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: AtisConfigEntry) -> None:
+        """Initialise the coordinator."""
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN}_atfm",
+            update_interval=ATFM_SCAN_INTERVAL,
+        )
+        self._session = async_get_clientsession(hass)
+
+    async def _async_update_data(self) -> DailyPlan:
+        try:
+            plan = await self._async_fetch()
+        except UpdateFailed as err:
+            self.update_interval = ATFM_RETRY_INTERVAL
+            if self.data is None:
+                raise
+            _LOGGER.warning("Unable to update the ATFM Daily Plan, keeping the last one: %s", err)
+            return self.data
+        self.update_interval = ATFM_SCAN_INTERVAL
+        if self.data is not None:
+            carry_over_hours(self.data, plan, dt_util.utcnow())
+        return plan
+
+    async def _async_fetch(self) -> DailyPlan:
+        try:
+            async with self._session.get(
+                ATFM_URL, timeout=aiohttp.ClientTimeout(total=ATFM_REQUEST_TIMEOUT)
+            ) as response:
+                response.raise_for_status()
+                content = await response.read()
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise UpdateFailed(f"Error fetching the ATFM Daily Plan: {err or type(err).__name__}") from err
+
+        # Parsing a PDF takes a moment of CPU, so keep it off the event loop.
+        plan = await self.hass.async_add_executor_job(parse_daily_plan, content)
+        if not plan.airports:
+            raise UpdateFailed("The ATFM Daily Plan has no airport pages that could be read")
+        return plan

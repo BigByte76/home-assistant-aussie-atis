@@ -5,10 +5,12 @@
         "title": "Australian ATIS",
         "description": "Choose the airports to monitor. Each airport becomes a device with one sensor per ATIS field.",
         "data": {
-          "airports": "Airports"
+          "airports": "Airports",
+          "atfm": "Include ATFM Daily Plan"
         },
         "data_description": {
-          "airports": "Some airports (mostly military and regional) only publish an ATIS while the tower is open. Their METAR and TAF sensors still update."
+          "airports": "Some airports (mostly military and regional) only publish an ATIS while the tower is open. Their METAR and TAF sensors still update.",
+          "atfm": "Download the Airservices Australia ATFM Daily Plan every 6 hours, for the planned runway mode and arrival rate at YSSY, YMML, YBBN and YPPH. Only used if one of those airports is selected."
         }
       }
     },
@@ -25,7 +27,11 @@
         "title": "Australian ATIS",
         "description": "Choose the airports to monitor. Devices for airports you remove are deleted.",
         "data": {
-          "airports": "Airports"
+          "airports": "Airports",
+          "atfm": "Include ATFM Daily Plan"
+        },
+        "data_description": {
+          "atfm": "Download the Airservices Australia ATFM Daily Plan every 6 hours, for the planned runway mode and arrival rate at YSSY, YMML, YBBN and YPPH. Only used if one of those airports is selected. Turning it off removes the ATFM sensors."
         }
       }
     },
@@ -97,6 +103,21 @@
       },
       "taf": {
         "name": "TAF"
+      },
+      "atfm_plan": {
+        "name": "ATFM plan"
+      },
+      "atfm_runway_mode": {
+        "name": "ATFM runway mode"
+      },
+      "atfm_arrival_rate": {
+        "name": "ATFM arrival rate"
+      },
+      "atfm_ground_delay_program": {
+        "name": "ATFM ground delay program"
+      },
+      "atfm_notes": {
+        "name": "ATFM notes"
       }
     }
   }
