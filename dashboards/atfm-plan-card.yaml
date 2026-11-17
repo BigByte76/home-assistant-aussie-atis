@@ -1,0 +1,41 @@
+# Australian ATIS – ATFM Daily Plan card
+#
+# A Markdown card with the Airservices ATFM Daily Plan for one airport: the
+# planned runway mode and arrival rate for each hour, in your local time.
+# Works for YSSY, YMML, YBBN and YPPH. Change the ICAO code on the first line
+# of `content` (lowercase), then paste this into a dashboard:
+# Edit dashboard → Add card → Manual.
+type: markdown
+content: |-
+  {%- set icao = 'yssy' -%}
+
+  {%- set p = 'sensor.' ~ icao ~ '_atis_atfm' -%}
+  {%- set forecast = state_attr(p ~ '_plan', 'forecast') or [] -%}
+  {%- set gdp = p ~ '_ground_delay_program' -%}
+
+  {%- if not has_value(p ~ '_plan') %}
+  ### 🗓️ ATFM plan {{ icao | upper }}
+
+  ⚠️ No ATFM Daily Plan. It covers YSSY, YMML, YBBN and YPPH; check that **{{ icao | upper }}** is selected in the Australian ATIS integration.
+  {%- else %}
+  ### 🗓️ ATFM plan {{ icao | upper }}, {{ as_datetime(states(p ~ '_plan')).strftime('%a %-d %b') }}
+
+  Version {{ state_attr(p ~ '_plan', 'version') }}
+
+  {%- if states(gdp) not in ['None', 'unknown', 'unavailable'] %}
+
+  ⏳ **Ground delay program:**
+  {%- for program in state_attr(gdp, 'programs') or [] %}
+  {{ program.name }} {{ as_local(as_datetime(program.start)).strftime('%H:%M') }}–{{ as_local(as_datetime(program.end)).strftime('%H:%M') }}
+  {%- endfor %}, {{ state_attr(gdp, 'affected_flights') }} flights affected, average delay {{ state_attr(gdp, 'average_ground_delay_minutes') }} min
+  {%- endif %}
+
+  | Time | Runway mode | Arrivals/h |
+  |:--|:--|--:|
+  {%- for h in forecast %}
+  {%- set start = as_datetime(h.start) %}
+  {%- set current = start <= now() < as_datetime(h.end) %}
+  {%- set b = '**' if current else '' %}
+  | {{ '▶ ' if current }}{{ b }}{{ as_local(start).strftime('%H:%M') }}{{ b }} | {{ b }}{{ h.runway_mode or '—' }}{{ b }} | {{ b }}{{ h.arrival_rate if h.arrival_rate is not none else '—' }}{{ b }} |
+  {%- endfor %}
+  {%- endif %}

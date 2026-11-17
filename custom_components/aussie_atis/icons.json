@@ -19,7 +19,12 @@
       "cloud": { "default": "mdi:cloud" },
       "sigwx": { "default": "mdi:weather-lightning" },
       "metar": { "default": "mdi:file-document-outline" },
-      "taf": { "default": "mdi:file-document-multiple-outline" }
+      "taf": { "default": "mdi:file-document-multiple-outline" },
+      "atfm_plan": { "default": "mdi:calendar-clock" },
+      "atfm_runway_mode": { "default": "mdi:airport" },
+      "atfm_arrival_rate": { "default": "mdi:airplane-landing" },
+      "atfm_ground_delay_program": { "default": "mdi:timer-sand" },
+      "atfm_notes": { "default": "mdi:note-text-outline" }
     }
   }
 }

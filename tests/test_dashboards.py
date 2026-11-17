@@ -4,14 +4,16 @@ The cards are Markdown cards whose content is a Home Assistant template, so
 rendering them here catches template errors and entity ID drift.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 
+from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 import yaml
 
-from custom_components.aussie_atis.const import BASE_URL, CONF_AIRPORTS, DOMAIN
+from custom_components.aussie_atis.const import ATFM_URL, BASE_URL, CONF_AIRPORTS, CONF_ATFM, DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 
@@ -24,10 +26,24 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow Home Assistant to load the integration from custom_components."""
 
 
-async def setup(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, codes: list[str]) -> None:
+@pytest.fixture(autouse=True)
+def mock_atfm_plan(aioclient_mock: AiohttpClientMocker) -> None:
+    """Serve the ATFM Daily Plan, for tests that turn it on."""
+    aioclient_mock.get(ATFM_URL, content=(FIXTURES / "atfm_daily_plan.pdf").read_bytes())
+
+
+async def setup(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    codes: list[str],
+    extra: tuple[str, ...] = (),
+    atfm: bool = False,
+) -> None:
+    """Set up the airports in ``codes``, served from fixtures, plus ``extra`` ones mocked by the caller."""
     for code in codes:
         aioclient_mock.get(BASE_URL.format(code=code), text=(FIXTURES / f"{code}.html").read_text())
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_AIRPORTS: [c.upper() for c in codes]})
+    airports = [c.upper() for c in codes] + list(extra)
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_AIRPORTS: airports, CONF_ATFM: atfm})
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -72,3 +88,28 @@ async def test_overview_card(hass: HomeAssistant, aioclient_mock: AiohttpClientM
         "| **YBBN** Brisbane | P | 01L, 01R | 01R | 320/15, MAX XW 18 | 1018 |",
         "| **YSSY** Sydney | A | 34L, 34R | 34L, 34R | 100/10 KTS,TW 5 KTS | 1016 |",
     ]
+
+
+async def test_atfm_plan_card(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, freezer: FrozenDateTimeFactory
+) -> None:
+    await hass.config.async_set_time_zone("Australia/Sydney")
+    freezer.move_to(datetime(2026, 11, 18, 2, 30, tzinfo=UTC))
+    aioclient_mock.get(BASE_URL.format(code="ypph"), text=(FIXTURES / "yssy.html").read_text())
+    await setup(hass, aioclient_mock, ["yssy", "ybas"], extra=("YPPH",), atfm=True)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    sydney = render(hass, "atfm-plan-card.yaml")
+    assert "### 🗓️ ATFM plan YSSY, Wed 18 Nov" in sydney
+    assert "Version 1" in sydney
+    assert "⏳" not in sydney
+    assert "| 06:00 | 34 DVAB | 34 |" in sydney
+    assert "| ▶ **13:00** | **34 DVAA** | **44** |" in sydney
+    assert "| 22:00 | 34 DVAB | 32 |" in sydney
+
+    perth = render(hass, "atfm-plan-card.yaml", "ypph")
+    assert "⏳ **Ground delay program:**\nGDP-A 11:00–01:00, 208 flights" in perth
+    assert "GDP-A 11:00–01:00, 208 flights affected, average delay 8.9 min" in perth
+
+    alice = render(hass, "atfm-plan-card.yaml", "ybas")
+    assert "No ATFM Daily Plan" in alice
