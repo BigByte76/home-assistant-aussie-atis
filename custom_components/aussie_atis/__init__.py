@@ -8,9 +8,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.storage import Store
 
 from .atfm_parser import ATFM_AIRPORTS
-from .const import CONF_AIRPORTS, CONF_ATFM, DOMAIN
+from .const import ATFM_STORE_VERSION, CONF_AIRPORTS, CONF_ATFM, DOMAIN, atfm_store_key
 from .coordinator import AtfmCoordinator, AtisCoordinator
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -66,6 +67,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: AtisConfigEntry) -> bool
 async def async_unload_entry(hass: HomeAssistant, entry: AtisConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: AtisConfigEntry) -> None:
+    """Delete the saved ATFM hours when the integration is removed."""
+    await Store(hass, ATFM_STORE_VERSION, atfm_store_key(entry.entry_id)).async_remove()
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: AtisConfigEntry) -> None:

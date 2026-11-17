@@ -25,6 +25,14 @@ ATFM_SCAN_INTERVAL: Final = timedelta(hours=6)
 # Retry sooner than the normal interval after a failed download.
 ATFM_RETRY_INTERVAL: Final = timedelta(minutes=30)
 ATFM_REQUEST_TIMEOUT: Final = 60  # seconds
+# The plan's remaining hours are saved in .storage, to survive a restart.
+ATFM_STORE_VERSION: Final = 1
+
+
+def atfm_store_key(entry_id: str) -> str:
+    """Return the .storage key for a config entry's saved ATFM hours."""
+    return f"{DOMAIN}.{entry_id}.atfm"
+
 
 # Airports offered in the config flow: ICAO code -> display name.
 AIRPORTS: Final[dict[str, str]] = {

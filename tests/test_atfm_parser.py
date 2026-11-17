@@ -10,11 +10,14 @@ from pathlib import Path
 import pytest
 
 from atfm_parser import (
+    PlanNote,
     _period,
     _resolve_ddhhmm,
     _split_mode,
     carry_over_hours,
+    hours_to_json,
     parse_daily_plan,
+    plan_from_hours_json,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -116,6 +119,73 @@ def test_carry_over_hours_from_previous_plan() -> None:
     assert sydney.hour_at(utc(17, 21, 30)).arrival_rate == 40
     # Same start: nothing to carry over.
     assert len(plan.airports["YMML"].hours) == 18
+
+
+def test_hours_json_round_trip(plan) -> None:
+    data = hours_to_json(plan, utc(18, 1, 30))
+    # 19Z to 00Z have ended; 01Z is still running.
+    assert data["YSSY"][0]["start"] == "2026-11-18T01:00:00+00:00"
+    assert len(data["YSSY"]) == 11
+
+    restored = plan_from_hours_json(data)
+    assert set(restored.airports) == {"YSSY", "YMML", "YBBN", "YPPH"}
+    for icao, airport in restored.airports.items():
+        assert airport.hours == plan.airports[icao].hours[-len(airport.hours) :]
+    assert restored.airports["YSSY"].hour_at(utc(18, 1, 30)).runway_mode == "34 DVAA"
+
+
+def test_hours_json_carries_over_like_the_previous_plan(plan) -> None:
+    previous = plan_from_hours_json(hours_to_json(plan, utc(17, 20, 30)))
+    new = parse_daily_plan((FIXTURES / "atfm_daily_plan.pdf").read_bytes())
+    new.airports["YSSY"].hours = new.airports["YSSY"].hours[4:]
+    carry_over_hours(previous, new, utc(17, 20, 30))
+    assert [h.start for h in new.airports["YSSY"].hours[:4]] == [
+        utc(17, 20),
+        utc(17, 21),
+        utc(17, 22),
+        utc(17, 23),
+    ]
+
+
+def test_carried_hours_keep_their_own_notes() -> None:
+    previous = parse_daily_plan((FIXTURES / "atfm_daily_plan.pdf").read_bytes())
+    previous.airports["YSSY"].metcdm_notes = (PlanNote(1, None, None, "Today's note."),)
+    plan = parse_daily_plan((FIXTURES / "atfm_daily_plan.pdf").read_bytes())
+    sydney = plan.airports["YSSY"]
+    sydney.hours = sydney.hours[4:]
+    new_note = sydney.metcdm_notes[0]
+    assert new_note.number == 1
+
+    # Saved and restored, as after a restart.
+    carry_over_hours(plan_from_hours_json(hours_to_json(previous, utc(17, 20, 30))), plan, utc(17, 20, 30))
+    assert [note.text for note in sydney.notes_for(sydney.hour_at(utc(17, 20, 30)))] == ["Today's note."]
+    assert sydney.notes_for(sydney.hour_at(utc(17, 23, 30))) == [new_note]
+
+    # Saved again: the carried hour keeps its note, with its period.
+    saved = hours_to_json(plan, utc(17, 20, 30))["YSSY"]
+    assert saved[0]["metcdm_notes"] == [{"number": 1, "start": None, "end": None, "text": "Today's note."}]
+    assert saved[3]["metcdm_notes"][0]["start"] == new_note.start.isoformat()
+    restored = plan_from_hours_json({"YSSY": saved}).airports["YSSY"]
+    assert restored.notes_for(restored.hour_at(utc(17, 23, 30))) == [new_note]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        None,
+        [],
+        "hours",
+        {"YSSY": "34"},
+        {"YSSY": [None, {}, {"start": "not a time"}, {"start": "2026-11-18T01:00:00"}, {"start": 5}]},
+        {"YSSY": [{"start": "2026-11-18T01:00:00+00:00", "arrival_rate": "many"}]},
+        {"YSSY": [{"start": "2026-11-18T01:00:00+00:00", "notes": [None]}]},
+        {"YSSY": [{"start": "2026-11-18T01:00:00+00:00", "metcdm_notes": [{"number": 1}]}]},
+        {"YSSY": [{"start": "2026-11-18T01:00:00+00:00", "metcdm_notes": [{"text": "x", "start": "soon"}]}]},
+    ],
+)
+def test_bad_hours_json_gives_empty_hours(data) -> None:
+    plan = plan_from_hours_json(data)
+    assert all(airport.hours == () for airport in plan.airports.values())
 
 
 def test_unreadable_input_gives_empty_plan() -> None:

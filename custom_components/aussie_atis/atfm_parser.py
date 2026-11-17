@@ -130,6 +130,9 @@ class AirportPlan:
     # Minutes.
     total_ground_delay: int | None = None
     average_ground_delay: float | None = None
+    # METCDM notes for hours carried over from an earlier plan, by hour start.
+    # Their note numbers refer to that plan's notes, not this one's.
+    carried_notes: dict[datetime, tuple[PlanNote, ...]] = field(default_factory=dict)
 
     def hour_at(self, when: datetime) -> PlanHour | None:
         """Return the hour covering ``when``, or None outside the plan."""
@@ -155,6 +158,8 @@ class AirportPlan:
         """Return the METCDM notes that apply to ``hour``."""
         if hour is None:
             return []
+        if (carried := self.carried_notes.get(hour.start)) is not None:
+            return list(carried)
         return [note for note in self.metcdm_notes if note.number in hour.notes]
 
 
@@ -183,6 +188,98 @@ def carry_over_hours(previous: DailyPlan, plan: DailyPlan, now: datetime) -> Non
             hour for hour in old.hours if hour.end > now and (first is None or hour.start < first)
         )
         airport.hours = earlier + airport.hours
+        for hour in earlier:
+            airport.carried_notes[hour.start] = tuple(old.notes_for(hour))
+
+
+def hours_to_json(plan: DailyPlan, now: datetime) -> dict[str, list[dict]]:
+    """Return each airport's hours that haven't ended, as JSON-compatible data.
+
+    This is saved so that ``carry_over_hours`` still has the current plan
+    after a restart, once the next day's plan has replaced it for download.
+    """
+    return {
+        icao: [
+            {
+                "start": hour.start.isoformat(),
+                "runway_mode": hour.runway_mode,
+                "runways": list(hour.runways),
+                "mode_code": hour.mode_code,
+                "arrival_rate": hour.arrival_rate,
+                "notes": list(hour.notes),
+                "metcdm_notes": [_note_to_json(note) for note in airport.notes_for(hour)],
+            }
+            for hour in airport.hours
+            if hour.end > now
+        ]
+        for icao, airport in plan.airports.items()
+    }
+
+
+def _note_to_json(note: PlanNote) -> dict:
+    return {
+        "number": note.number,
+        "start": note.start.isoformat() if note.start else None,
+        "end": note.end.isoformat() if note.end else None,
+        "text": note.text,
+    }
+
+
+def _note_from_json(data: dict) -> PlanNote:
+    def when(value: object) -> datetime | None:
+        if value is None:
+            return None
+        parsed = datetime.fromisoformat(value)  # type: ignore[arg-type]
+        if parsed.tzinfo is None:
+            raise ValueError("naive time")
+        return parsed.astimezone(UTC)
+
+    number = data.get("number")
+    return PlanNote(
+        number=int(number) if number is not None else None,
+        start=when(data.get("start")),
+        end=when(data.get("end")),
+        text=str(data["text"]),
+    )
+
+
+def plan_from_hours_json(data: object) -> DailyPlan:
+    """Rebuild a plan holding only hours from ``hours_to_json``. Never raises.
+
+    Hours that can't be read are skipped, so saved data from an older or
+    damaged file gives an emptier plan rather than an error.
+    """
+    plan = DailyPlan()
+    if not isinstance(data, dict):
+        return plan
+    for icao, hours in data.items():
+        if not isinstance(icao, str) or not isinstance(hours, list):
+            continue
+        parsed: list[PlanHour] = []
+        notes: dict[datetime, tuple[PlanNote, ...]] = {}
+        for item in hours:
+            try:
+                start = datetime.fromisoformat(item["start"])
+                if start.tzinfo is None:
+                    continue
+                rate = item.get("arrival_rate")
+                hour = PlanHour(
+                    start=start.astimezone(UTC),
+                    runway_mode=item.get("runway_mode"),
+                    runways=tuple(str(runway) for runway in item.get("runways") or ()),
+                    mode_code=item.get("mode_code"),
+                    arrival_rate=int(rate) if rate is not None else None,
+                    notes=tuple(int(note) for note in item.get("notes") or ()),
+                )
+                hour_notes = tuple(_note_from_json(note) for note in item.get("metcdm_notes") or ())
+            except (KeyError, TypeError, ValueError, AttributeError):
+                continue
+            parsed.append(hour)
+            notes[hour.start] = hour_notes
+        plan.airports[icao] = AirportPlan(
+            icao=icao, hours=tuple(sorted(parsed, key=lambda hour: hour.start)), carried_notes=notes
+        )
+    return plan
 
 
 @dataclass(frozen=True)
